@@ -4,3 +4,5 @@
 *.pcap
 *.eps -text
 *.fad -text
+cmake-cache/
+*.gch
