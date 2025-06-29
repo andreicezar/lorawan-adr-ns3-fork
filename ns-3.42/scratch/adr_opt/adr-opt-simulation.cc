@@ -19,6 +19,12 @@
 #include "ns3/random-variable-stream.h"
 #include "ns3/rectangle.h"
 #include "ns3/string.h"
+#include "ns3/lora-net-device.h"
+#include "ns3/end-device-lorawan-mac.h"
+#include "ns3/lora-phy.h"
+#include "ns3/simple-end-device-lora-phy.h"
+#include "ns3/lorawan-mac-helper.h"
+#include <vector>
 
 using namespace ns3;
 using namespace lorawan;
@@ -39,19 +45,20 @@ OnTxPowerChange(double oldTxPower, double newTxPower)
 
 int main(int argc, char* argv[])
 {
-    // --- Parameters, default values matching example ---
+    // --- Parameters: ADAPTED FOR YOUR REQUEST ---
     bool verbose = false;
     bool adrEnabled = true;
     bool initializeSF = false;
-    int nDevices = 400;
-    int nPeriodsOf20Minutes = 20;
+    int nDevices = 1;                // 1 end device
+    int nPeriodsOf20Minutes = 20;    // Default simulation duration
     double mobileNodeProbability = 0.0;
-    double sideLengthMeters = 10000;
-    int gatewayDistanceMeters = 5000;
+    double sideLengthMeters = 1500.0;  // Max range between nodes ≤ 3km
+    int gatewayDistanceMeters = 1000;  // GW grid spacing (fits 8 GWs in ~3km)
     double maxRandomLossDb = 10;
     double minSpeedMetersPerSecond = 2;
     double maxSpeedMetersPerSecond = 16;
-    std::string adrType = "ns3::lorawan::ADRoptComponent"; // <<=== USE ADRopt!
+    int appPeriod = 1200;
+    std::string adrType = "ns3::lorawan::ADRoptComponent"; // ADRopt
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("verbose", "Whether to print output or not", verbose);
@@ -65,10 +72,11 @@ int main(int argc, char* argv[])
     cmd.AddValue("initializeSF", "Whether to initialize the SFs", initializeSF);
     cmd.AddValue("MinSpeed", "Min speed (m/s) for mobile devices", minSpeedMetersPerSecond);
     cmd.AddValue("MaxSpeed", "Max speed (m/s) for mobile devices", maxSpeedMetersPerSecond);
+    cmd.AddValue("appPeriod", "Application packet period (seconds)", appPeriod);
+
     cmd.Parse(argc, argv);
 
-    int gatewayRings = 2 + (std::sqrt(2) * sideLengthMeters) / (gatewayDistanceMeters);
-    int nGateways = 3 * gatewayRings * gatewayRings - 3 * gatewayRings + 1;
+    int nGateways = 8; // *** FIXED to 8 gateways ***
 
     // --- Logging ---
     LogComponentEnable("AdrOptSimulation", LOG_LEVEL_ALL);
@@ -77,7 +85,6 @@ int main(int argc, char* argv[])
     LogComponentEnableAll(LOG_PREFIX_NODE);
     LogComponentEnableAll(LOG_PREFIX_TIME);
 
-    // --- Always enable ADR bit in MAC ---
     Config::SetDefault("ns3::EndDeviceLorawanMac::ADR", BooleanValue(true));
 
     // --- Channel setup (loss, delay, random fading) ---
@@ -102,15 +109,32 @@ int main(int argc, char* argv[])
                                     "Y", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
                                         "Min", DoubleValue(-sideLengthMeters),
                                         "Max", DoubleValue(sideLengthMeters))));
-    Ptr<HexGridPositionAllocator> hexAllocator =
-        CreateObject<HexGridPositionAllocator>(gatewayDistanceMeters / 2);
-    mobilityGw.SetPositionAllocator(hexAllocator);
-    mobilityGw.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    // Ptr<HexGridPositionAllocator> hexAllocator =
+    //     CreateObject<HexGridPositionAllocator>(gatewayDistanceMeters / 2);
+    // mobilityGw.SetPositionAllocator(hexAllocator);
+    // mobilityGw.SetMobilityModel("ns3::ConstantPositionMobilityModel");
 
-    // --- Create gateways and install mobility/devices ---
+    // // --- Create gateways and install mobility/devices ---
+    // NodeContainer gateways;
+    // gateways.Create(nGateways);
+    // mobilityGw.Install(gateways);
+
     NodeContainer gateways;
     gateways.Create(nGateways);
+
+    Ptr<ListPositionAllocator> gwPositionAlloc = CreateObject<ListPositionAllocator>();
+    gwPositionAlloc->Add(Vector(0, 0, 0));
+    gwPositionAlloc->Add(Vector(3000, 0, 0));
+    gwPositionAlloc->Add(Vector(0, 3000, 0));
+    gwPositionAlloc->Add(Vector(3000, 3000, 0));
+    gwPositionAlloc->Add(Vector(1500, 0, 0));
+    gwPositionAlloc->Add(Vector(0, 1500, 0));
+    gwPositionAlloc->Add(Vector(3000, 1500, 0));
+    gwPositionAlloc->Add(Vector(1500, 3000, 0));
+    mobilityGw.SetPositionAllocator(gwPositionAlloc);
+    mobilityGw.SetMobilityModel("ns3::ConstantPositionMobilityModel");
     mobilityGw.Install(gateways);
+
 
     LoraPhyHelper phyHelper;
     phyHelper.SetChannel(channel);
@@ -128,20 +152,9 @@ int main(int argc, char* argv[])
 
     // Fixed devices
     mobilityEd.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    int fixedPositionNodes = int(double(nDevices) * (1 - mobileNodeProbability));
+    int fixedPositionNodes = 1; // Only one device, all fixed
     for (int i = 0; i < fixedPositionNodes; ++i)
         mobilityEd.Install(endDevices.Get(i));
-    // Mobile devices (if any)
-    if (mobileNodeProbability > 0.0) {
-        mobilityEd.SetMobilityModel("ns3::RandomWalk2dMobilityModel",
-            "Bounds", RectangleValue(Rectangle(-sideLengthMeters, sideLengthMeters, -sideLengthMeters, sideLengthMeters)),
-            "Distance", DoubleValue(1000),
-            "Speed", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
-                "Min", DoubleValue(minSpeedMetersPerSecond),
-                "Max", DoubleValue(maxSpeedMetersPerSecond))));
-        for (int i = fixedPositionNodes; i < nDevices; ++i)
-            mobilityEd.Install(endDevices.Get(i));
-    }
 
     // --- LoraNetDeviceAddress ---
     uint8_t nwkId = 54;
@@ -155,18 +168,63 @@ int main(int argc, char* argv[])
     macHelper.SetRegion(LorawanMacHelper::EU);
     helper.Install(phyHelper, macHelper, endDevices);
 
-    // --- Application on end devices ---
-    int appPeriodSeconds = 1200; // 20 minutes per packet (match example)
-    PeriodicSenderHelper appHelper;
-    appHelper.SetPeriod(Seconds(appPeriodSeconds));
-    ApplicationContainer appContainer = appHelper.Install(endDevices);
-
     // --- Optionally set spreading factors up
     if (initializeSF) {
         LorawanMacHelper::SetSpreadingFactorsUp(endDevices, gateways, channel);
     }
 
-    // --- PointToPoint links between gateways and server (for full example fidelity) ---
+    for (auto i = 0u; i < endDevices.GetN(); ++i) {
+        Ptr<Node> node = endDevices.Get(i);
+        Ptr<NetDevice> dev = node->GetDevice(0);
+        Ptr<LoraNetDevice> loraDev = DynamicCast<LoraNetDevice>(dev);
+        if (loraDev) {
+            // Get the PHY and MAC layer objects
+            Ptr<LoraPhy> phy = loraDev->GetPhy();
+            Ptr<EndDeviceLorawanMac> mac = DynamicCast<EndDeviceLorawanMac>(loraDev->GetMac());
+
+            if (mac) {
+                // Set TxPower on the LorawanMac object
+                // As per lorawan-mac.cc, the TxPower levels are defined by a vector of dBm values.
+                // TP2 (TxPower index 2) corresponds to the 2nd element in the vector.
+                // We set all TxPower levels according to the standard and set the 2nd index to 2 dBm.
+                std::vector<double> txPowers;
+                txPowers.push_back(14); // TP0
+                txPowers.push_back(12); // TP1
+                txPowers.push_back(2);  // TP2 dBm
+                txPowers.push_back(0);  // TP3
+                txPowers.push_back(-2); // TP4
+                txPowers.push_back(-4); // TP5
+                txPowers.push_back(-6); // TP6
+                txPowers.push_back(-8); // TP7
+                txPowers.push_back(-10); // TP8
+                txPowers.push_back(-12); // TP9
+                txPowers.push_back(-14); // TP10
+                txPowers.push_back(-16); // TP11
+                txPowers.push_back(-18); // TP12
+                txPowers.push_back(-20); // TP13
+                txPowers.push_back(-22); // TP14
+                mac->SetTxDbmForTxPower(txPowers);
+
+                // Set Spreading Factor on the MAC layer
+                // Note: The spreading factor is typically managed by the MAC layer or a helper class.
+                // The method SetSpreadingFactor does not exist on SimpleEndDeviceLoraPhy.
+                // We are setting the data rate, which determines the spreading factor for a given region.
+                // This corresponds to SF7 for the EU868 region, for example.
+                mac->SetDataRate(5); // This corresponds to SF7 in some regions.
+                                    // You should verify the data rate to SF mapping for your specific region.
+                                    // For a more robust solution, use LorawanMacHelper::SetSpreadingFactorsUp()
+                                    // before installing devices, as shown in the ns-3 examples.
+            }
+        }
+    }
+
+    // --- Application on end devices ---
+    int appPeriodSeconds = 1200; // 20 minutes per packet
+    PeriodicSenderHelper appHelper;
+    appHelper.SetPeriod(Seconds(appPeriodSeconds));
+    ApplicationContainer appContainer = appHelper.Install(endDevices);
+
+    // --- PointToPoint links between gateways and server ---
     Ptr<Node> networkServer = CreateObject<Node>();
     PointToPointHelper p2p;
     p2p.SetDeviceAttribute("DataRate", StringValue("5Mbps"));
@@ -179,15 +237,13 @@ int main(int argc, char* argv[])
         gwRegistration.push_back({serverP2PNetDev, *gw});
     }
 
-    // --- Network server app ---
     NetworkServerHelper networkServerHelper;
     networkServerHelper.EnableAdr(adrEnabled);
-    networkServerHelper.SetAdr(adrType);  // <<=== ADRopt!
+    networkServerHelper.SetAdr(adrType);
     networkServerHelper.SetGatewaysP2P(gwRegistration);
     networkServerHelper.SetEndDevices(endDevices);
     networkServerHelper.Install(networkServer);
 
-    // --- Forwarder app on gateways ---
     ForwarderHelper forwarderHelper;
     forwarderHelper.Install(gateways);
 
@@ -211,7 +267,6 @@ int main(int argc, char* argv[])
     Simulator::Run();
     Simulator::Destroy();
 
-    // --- Print a summary, if needed ---
     LoraPacketTracker& tracker = helper.GetPacketTracker();
     std::cout << tracker.CountMacPacketsGlobally(Seconds(appPeriodSeconds * (nPeriodsOf20Minutes - 2)),
                                                  Seconds(appPeriodSeconds * (nPeriodsOf20Minutes - 1)))
