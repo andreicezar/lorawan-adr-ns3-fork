@@ -166,6 +166,9 @@ int main(int argc, char* argv[])
     macHelper.SetDeviceType(LorawanMacHelper::ED_A);
     macHelper.SetAddressGenerator(addrGen);
     macHelper.SetRegion(LorawanMacHelper::EU);
+
+    macHelper.Set("MType", StringValue("Confirmed"));
+
     helper.Install(phyHelper, macHelper, endDevices);
 
     // --- Optionally set spreading factors up
@@ -260,6 +263,7 @@ int main(int argc, char* argv[])
     helper.EnablePeriodicDeviceStatusPrinting(endDevices, gateways, "nodeData.txt", stateSamplePeriod);
     helper.EnablePeriodicPhyPerformancePrinting(gateways, "phyPerformance.txt", stateSamplePeriod);
     helper.EnablePeriodicGlobalPerformancePrinting("globalPerformance.txt", stateSamplePeriod);
+    helper.EnablePeriodicTxInfoPrinting("txInfo.txt", stateSamplePeriod);
 
     // --- Run the simulation ---
     Time simulationTime = Seconds(appPeriodSeconds * nPeriodsOf20Minutes);

@@ -23,6 +23,6 @@ echo "=== FINAL BUILD (WITH HEADERS) ==="
 
 # 6. Run your scenario/script (schimbă cu scriptul tău)
 echo "=== RUN SIMULATION SCRIPT ==="
-./scratch/adr_opt/run_complete_adr.sh
+time ./scratch/adr_opt/run_complete_adr.sh
 
 echo "=== ALL DONE ==="

@@ -2,228 +2,168 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import re
 import sys
-from collections import defaultdict
+import os
+import argparse
 
 # --- File Parsing Functions ---
-
 def parse_global_performance(filepath):
-    """
-    Parses the globalPerformance.txt file into a pandas DataFrame.
-    Expected format: "+<time>s <PDR> <EnergyEfficiency>"
-    Example: "+0s 0.000000 0.000000"
-    """
+    """Parses globalPerformance.txt"""
     data = []
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line: # Skip empty lines
-                continue
-            # Regex to match time (e.g., +123s or +123.45s) and two float values
-            match = re.match(r'\+(\d+\.?\d*)s (\d+\.?\d*) (\d+\.?\d*)', line)
-            if match:
-                time_s = float(match.group(1))
-                pdr = float(match.group(2))
-                energy_efficiency = float(match.group(3))
-                data.append({'Time_s': time_s, 'PDR': pdr, 'EnergyEfficiency': energy_efficiency})
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                match = re.match(r'\+(\d+\.?\d*)s\s+(\d+\.?\d*)\s+(\d+\.?\d*)', line.strip())
+                if match:
+                    time_s, sent, received = [float(g) for g in match.groups()]
+                    pdr = received / sent if sent > 0 else 0
+                    data.append({'Time_s': time_s, 'PDR': pdr, 'PacketsSent': sent, 'PacketsReceived': received})
+    except FileNotFoundError:
+        print(f"Warning: File not found: {filepath}")
     return pd.DataFrame(data)
 
 def parse_node_data(filepath):
-    """
-    Parses the nodeData.txt file into a pandas DataFrame.
-    Expected format: "+<time>s <DeviceId> <X-coord> <Y-coord> <DR> <TXPower>"
-    Example: "+0s 8 866.401 -558.515 5 14"
-    """
+    """Parses nodeData.txt"""
     data = []
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line: # Skip empty lines
-                continue
-            # Regex to match time, device ID, x, y coordinates, DR, and TX Power
-            # Device ID can be any integer, coords floats, DR/TXPower integers
-            match = re.match(r'\+(\d+\.?\d*)s (\d+) (\-?\d+\.?\d*) (\-?\d+\.?\d*) (\d+) (\d+)', line)
-            if match:
-                time_s = float(match.group(1))
-                device_id = int(match.group(2))
-                x_coord = float(match.group(3))
-                y_coord = float(match.group(4))
-                dr = int(match.group(5))
-                tx_power = int(match.group(6))
-                data.append({
-                    'Time_s': time_s,
-                    'DeviceId': device_id,
-                    'X_Coord': x_coord,
-                    'Y_Coord': y_coord,
-                    'DR': dr,
-                    'TX_Power': tx_power
-                })
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                match = re.match(r'\+(\d+\.?\d*)s\s+(\d+)\s+(-?\d+\.?\d*)\s+(-?\d+\.?\d*)\s+(\d+)\s+(\d+)', line.strip())
+                if match:
+                    data.append({'Time_s': float(match.group(1)), 'DeviceId': int(match.group(2)), 'DR': int(match.group(5)), 'TX_Power': int(match.group(6))})
+    except FileNotFoundError:
+        print(f"Warning: File not found: {filepath}")
     return pd.DataFrame(data)
 
 def parse_phy_performance(filepath):
-    """
-    Parses the phyPerformance.txt file into a pandas DataFrame.
-    Expected format: "+<time>s <DeviceId> <PacketSent> <PacketReceived> <Collisions> <ChannelBusy> <RxWindowTooSoon> <RxWindowTooLate>"
-    Example: "+0s 0 0 0 0 0 0 0"
-    """
+    """Parses phyPerformance.txt"""
     data = []
-    with open(filepath, 'r') as f:
-        for line in f:
-            line = line.strip()
-            if not line: # Skip empty lines
-                continue
-            # Regex to match time, device ID, and several integer performance counters
-            match = re.match(r'\+(\d+\.?\d*)s (\d+) (\d+) (\d+) (\d+) (\d+) (\d+) (\d+)', line)
-            if match:
-                time_s = float(match.group(1))
-                device_id = int(match.group(2))
-                packet_sent = int(match.group(3))
-                packet_received = int(match.group(4))
-                collisions = int(match.group(5))
-                channel_busy = int(match.group(6))
-                rx_window_too_soon = int(match.group(7))
-                rx_window_too_late = int(match.group(8))
-                data.append({
-                    'Time_s': time_s,
-                    'DeviceId': device_id,
-                    'PacketsSent': packet_sent,
-                    'PacketsReceived': packet_received,
-                    'Collisions': collisions,
-                    'ChannelBusy': channel_busy,
-                    'RxWindowTooSoon': rx_window_too_soon,
-                    'RxWindowTooLate': rx_window_too_late
-                })
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                match = re.match(r'\+(\d+\.?\d*)s\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)', line.strip())
+                if match:
+                    data.append({'Time_s': float(match.group(1)), 'GatewayId': int(match.group(2)), 'TotalSentInInterval': int(match.group(3)), 'Received': int(match.group(4)), 'Interfered': int(match.group(5)), 'NoMoreReceivers': int(match.group(6)), 'UnderSensitivity': int(match.group(7)), 'LostBecauseTx': int(match.group(8))})
+    except FileNotFoundError:
+        print(f"Warning: File not found: {filepath}")
     return pd.DataFrame(data)
 
-# --- Analysis and Plotting Functions ---
-
-def plot_global_performance(df_global):
+def parse_tx_info(filepath):
     """
-    Plots global PDR (Packet Delivery Ratio) and Energy Efficiency over time.
+    Parses txInfo.txt and calculates total transmissions from AvgTxPerPkt.
     """
-    fig, ax1 = plt.subplots(figsize=(12, 6))
+    data = []
+    try:
+        with open(filepath, 'r') as f:
+            next(f, None)  # Skip header
+            for line in f:
+                # This regex now ignores the histogram, as it's not needed.
+                match = re.search(r'(\d+)\s+ConfirmedPkts:(\d+)\s+SuccessfulPkts:(\d+)\s+FailedPkts:(\d+)\s+AvgTxPerPkt:([\d\.]+)', line)
+                if match:
+                    confirmed_pkts = int(match.group(2))
+                    avg_tx = float(match.group(5))
+                    
+                    # Calculate total transmissions directly. It's more robust.
+                    # Since ConfirmedPkts is 1, TotalTx is just the rounded AvgTx.
+                    total_tx_in_interval = round(avg_tx * confirmed_pkts)
+                    
+                    data.append({
+                        'Time_s': int(match.group(1)),
+                        'ConfirmedPkts': confirmed_pkts,
+                        'SuccessfulPkts': int(match.group(3)),
+                        'FailedPkts': int(match.group(4)),
+                        'AvgTxPerPkt': avg_tx,
+                        'TotalTxInInterval': total_tx_in_interval
+                    })
+    except FileNotFoundError:
+        print(f"Warning: File not found: {filepath}")
+    return pd.DataFrame(data)
 
-    ax1.set_xlabel('Time (seconds)')
-    ax1.set_ylabel('Packet Delivery Ratio', color='tab:blue')
-    ax1.plot(df_global['Time_s'], df_global['PDR'], color='tab:blue', label='Global PDR')
-    ax1.tick_params(axis='y', labelcolor='tab:blue')
-    ax1.set_title('Global Network Performance Over Time')
-    ax1.grid(True, linestyle='--', alpha=0.6)
+def calculate_and_print_kpis(df_tx, df_node, payload_size):
+    """
+    Calculates and prints key performance indicators (KPIs) for the ADR performance.
+    """
+    if df_tx.empty:
+        print("\nKPI Report could not be generated: No transmission data available.")
+        return
 
-    ax2 = ax1.twinx()  # Create a second y-axis that shares the same x-axis
-    ax2.set_ylabel('Energy Efficiency', color='tab:red')
-    ax2.plot(df_global['Time_s'], df_global['EnergyEfficiency'], color='tab:red', label='Global Energy Efficiency')
-    ax2.tick_params(axis='y', labelcolor='tab:red')
-
-    # Combine legends from both axes
-    lines, labels = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0.1, 0.9))
+    # --- Reliability Metrics ---
+    total_confirmed = df_tx['ConfirmedPkts'].sum()
+    total_successful = df_tx['SuccessfulPkts'].sum()
+    total_failed = df_tx['FailedPkts'].sum()
     
-    fig.tight_layout() # Adjust layout to prevent labels from overlapping
-    plt.show()
+    packet_success_rate = (total_successful / total_confirmed) * 100 if total_confirmed > 0 else 0
+    packet_error_rate = (total_failed / total_confirmed) * 100 if total_confirmed > 0 else 0
 
-def plot_device_adr_parameters(df_node):
-    """
-    Plots Data Rate (DR) and Transmit Power (TX_Power) for each unique device over time.
-    Uses 'step' plot to show discrete changes.
-    """
-    unique_devices = df_node['DeviceId'].unique()
-    for device_id in unique_devices:
-        # Filter data for the current device and sort by time
-        df_device = df_node[df_node['DeviceId'] == device_id].sort_values('Time_s')
+    # --- Efficiency Metrics ---
+    total_transmissions = df_tx['TotalTxInInterval'].sum()
+    avg_transmissions = total_transmissions / total_confirmed if total_confirmed > 0 else 0
 
-        fig, ax1 = plt.subplots(figsize=(12, 6))
-        ax1.set_xlabel('Time (seconds)')
-        ax1.set_ylabel('Data Rate (DR)', color='tab:green')
-        # Use 'step' plot to show changes as discrete steps, typical for DR/TX power
-        ax1.step(df_device['Time_s'], df_device['DR'], where='post', color='tab:green', label='Data Rate')
-        ax1.tick_params(axis='y', labelcolor='tab:green')
-        ax1.set_title(f'Device {device_id} - ADR Parameters Over Time')
-        ax1.grid(True, linestyle='--', alpha=0.6)
+    # --- Throughput Metrics ---
+    total_simulation_time = df_node['Time_s'].max() if not df_node.empty else df_tx['Time_s'].max()
+    total_bits_extracted = total_successful * payload_size * 8
+    data_extraction_rate = total_bits_extracted / total_simulation_time if total_simulation_time > 0 else 0
 
-        ax2 = ax1.twinx() # Create a second y-axis for TX Power
-        ax2.set_ylabel('TX Power (dBm)', color='tab:purple')
-        ax2.step(df_device['Time_s'], df_device['TX_Power'], where='post', color='tab:purple', label='TX Power')
-        ax2.tick_params(axis='y', labelcolor='tab:purple')
+    # --- Final ADR State ---
+    final_dr = "N/A"
+    final_power = "N/A"
+    if not df_node.empty:
+        final_state = df_node.iloc[-1]
+        final_dr = final_state['DR']
+        final_power = final_state['TX_Power']
 
-        # Combine legends
-        lines, labels = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines + lines2, labels + labels2, loc='upper left', bbox_to_anchor=(0.1, 0.9))
+    # --- Print Report ---
+    print("\n" + "="*50)
+    print(" ADR Performance Analysis Report")
+    print("="*50)
+    print(f"\n[Simulation Overview]")
+    print(f"  Total Simulation Time:      {total_simulation_time:.2f} s")
+    print(f"  Final Device State:         DR{final_dr}, {final_power} dBm")
+    
+    print(f"\n[Reliability Metrics]")
+    print(f"  Total Confirmed Packets:    {total_confirmed}")
+    print(f"  - Successful Packets:       {total_successful}")
+    print(f"  - Failed Packets:           {total_failed}")
+    print(f"  Packet Success Rate (PSR):  {packet_success_rate:.2f}%")
+    print(f"  Packet Error Rate (PER):    {packet_error_rate:.2f}%")
 
-        fig.tight_layout()
-        plt.show()
+    print(f"\n[Efficiency & Throughput]")
+    print(f"  Total Transmissions:        {total_transmissions}")
+    print(f"  Avg. Transmissions/Packet:  {avg_transmissions:.3f}")
+    print(f"  Data Extraction Rate (DER): {data_extraction_rate:.2f} bps")
+    print("="*50)
 
-def plot_device_phy_performance(df_phy):
-    """
-    Plots physical layer performance metrics (Packets Sent, Received, Collisions)
-    for each unique device over time.
-    """
-    unique_devices = df_phy['DeviceId'].unique()
-    for device_id in unique_devices:
-        # Filter data for the current device and sort by time
-        df_device = df_phy[df_phy['DeviceId'] == device_id].sort_values('Time_s')
-
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.set_xlabel('Time (seconds)')
-        ax.set_ylabel('Count')
-        ax.plot(df_device['Time_s'], df_device['PacketsSent'], label='Packets Sent', marker='o', markersize=4, linestyle='-')
-        ax.plot(df_device['Time_s'], df_device['PacketsReceived'], label='Packets Received', marker='x', markersize=4, linestyle='-')
-        ax.plot(df_device['Time_s'], df_device['Collisions'], label='Collisions', marker='^', markersize=4, linestyle='-')
-        
-        ax.set_title(f'Device {device_id} - Physical Layer Performance Over Time')
-        ax.grid(True, linestyle='--', alpha=0.6)
-        ax.legend()
-        plt.show()
 
 # --- Main Execution ---
 
-def main(global_perf_file, node_data_file, phy_perf_file):
-    """
-    Main function to orchestrate parsing of files and generation of plots.
-    """
-    print(f"Starting analysis of:\n  - {global_perf_file}\n  - {node_data_file}\n  - {phy_perf_file}")
+def main():
+    parser = argparse.ArgumentParser(description="Analyze NS-3 LoRaWAN simulation output.")
+    parser.add_argument("main_log", help="Path to the main simulation log (e.g., complete_simulation.log)")
+    parser.add_argument("global_perf", help="Path to globalPerformance.txt")
+    parser.add_argument("node_data", help="Path to nodeData.txt")
+    parser.add_argument("phy_perf", help="Path to phyPerformance.txt")
+    parser.add_argument("tx_info", help="Path to txInfo.txt")
+    parser.add_argument("--payload-size", type=int, default=20, help="Payload size in bytes used in the simulation.")
+    parser.add_argument("--no-plots", action="store_true", help="Suppress plot generation.")
 
-    # Parse each file
-    df_global = parse_global_performance(global_perf_file)
-    df_node = parse_node_data(node_data_file)
-    df_phy = parse_phy_performance(phy_perf_file)
+    args = parser.parse_args()
+    
+    print("Starting analysis on files...")
 
-    # Generate plots if data is available
-    if not df_global.empty:
-        print("\n--- Global Performance Data Head ---")
-        print(df_global.head())
-        plot_global_performance(df_global)
+    # Parse all log files
+    df_global = parse_global_performance(args.global_perf)
+    df_node = parse_node_data(args.node_data)
+    df_phy = parse_phy_performance(args.phy_perf)
+    df_tx = parse_tx_info(args.tx_info)
+    
+    # Calculate and Print KPIs
+    calculate_and_print_kpis(df_tx, df_node, args.payload_size)
+
+    if not args.no_plots:
+        print("\nPlot generation is enabled. You can add plotting function calls here if needed.")
     else:
-        print(f"Warning: No data parsed from {global_perf_file}. Skipping global performance plot.")
+        print("\nPlot generation suppressed by --no-plots flag.")
 
-    if not df_node.empty:
-        print("\n--- Node Data Head ---")
-        print(df_node.head())
-        plot_device_adr_parameters(df_node)
-    else:
-        print(f"Warning: No data parsed from {node_data_file}. Skipping device ADR parameters plot.")
-
-    if not df_phy.empty:
-        print("\n--- Physical Layer Performance Data Head ---")
-        print(df_phy.head())
-        plot_device_phy_performance(df_phy)
-    else:
-        print(f"Warning: No data parsed from {phy_perf_file}. Skipping physical layer performance plot.")
-
-    print("\nAnalysis complete. Check generated plots.")
+    print("\nAnalysis complete.")
 
 if __name__ == "__main__":
-    # Check if the correct number of command-line arguments are provided
-    if len(sys.argv) != 4:
-        print("Usage: python3 analyze_ns3_outputs.py <global_performance_file> <node_data_file> <phy_performance_file>")
-        print("Example: python3 analyze_ns3_outputs.py globalPerformance.txt nodeData.txt phyPerformance.txt")
-        sys.exit(1) # Exit with an error code
-
-    # Assign command-line arguments to variables
-    global_perf_file = sys.argv[1]
-    node_data_file = sys.argv[2]
-    phy_perf_file = sys.argv[3]
-
-    # Call the main analysis function
-    main(global_perf_file, node_data_file, phy_perf_file)
+    main()
