@@ -71,6 +71,13 @@ void OnPacketSent(Ptr<const Packet> packet) {
         }
     }
     
+    // DEBUG: Show timing progress every 1000 packets
+    if (g_totalSent % 1000 == 0) {
+        double currentTime = Simulator::Now().GetSeconds();
+        std::cout << "DEBUG: Packet " << g_totalSent << " sent at " << currentTime 
+                  << "s (" << (currentTime/60.0) << " min)" << std::endl;
+    }
+    
     NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
@@ -283,11 +290,11 @@ void ExportScenario2Results(const std::string& filename, NodeContainer endDevice
 
 int main(int argc, char* argv[])
 {
-    // Scenario 2 Parameters - OPTIMIZED for ADR testing
+    // Scenario 2 Parameters - OPTIMIZED for ADR testing (100 packets per device)
     int nDevices = 100;
     int nGateways = 1;
-    int simulationTime = 160; // minutes (extended for ADR testing)
-    int packetInterval = 120; // seconds - longer intervals for ADR
+    int simulationTime = 200; // minutes (for exactly 100 packets per device)
+    int packetInterval = 120; // seconds - 100 packets per device
     double sideLengthMeters = 5000; // 5km x 5km area
     double maxRandomLossDb = 5.0;
     bool adrEnabled = false; // Default to fixed SF, can be overridden
@@ -302,13 +309,20 @@ int main(int argc, char* argv[])
     cmd.AddValue("adrType", "ADR algorithm type", adrType);
     cmd.Parse(argc, argv);
 
+    // DEBUG: Print actual parameter values being used
+    std::cout << "=== DEBUG: ACTUAL PARAMETERS BEING USED ===" << std::endl;
+    std::cout << "simulationTime = " << simulationTime << " minutes" << std::endl;
+    std::cout << "packetInterval = " << packetInterval << " seconds" << std::endl;
+    std::cout << "Expected packets per device = " << (simulationTime * 60 / packetInterval) << std::endl;
+    std::cout << "Expected total packets = " << (nDevices * simulationTime * 60 / packetInterval) << std::endl;
+    std::cout << "adrEnabled = " << (adrEnabled ? "TRUE" : "FALSE") << std::endl;
+    std::cout << "=============================================" << std::endl;
+
     // Logging
     LogComponentEnable("Scenario02AdrComparison", LOG_LEVEL_INFO);
     
     // EXPLICIT ADR configuration based on parameter
     SetupAdrConfiguration(adrEnabled);
-    
-    std::cout << "Expected packets per device: " << (simulationTime * 60 / packetInterval) << std::endl;
     
     // Create nodes
     NodeContainer endDevices, gateways;
@@ -331,12 +345,55 @@ int main(int argc, char* argv[])
     ConnectStandardTraces(&OnPacketSent, &OnGatewayReceive);
     ConnectAdrTraces(); // ADR-specific traces
     
-    // Setup timing and applications
-    SetupStandardTiming(endDevices, simulationTime, packetInterval, &BuildDeviceMapping);
+    // DEBUG: Use standard timing instead of staggered
+    std::cout << "DEBUG: Using SetupStandardTiming for debugging..." << std::endl;
+    
+    // Manual setup for better control and debugging
+    Simulator::Schedule(Seconds(1.0), &BuildDeviceMapping, endDevices);
+
+    PeriodicSenderHelper appHelper;
+    appHelper.SetPeriod(Seconds(packetInterval));
+    appHelper.SetPacketSize(51);
+    
+    // DEBUG: Check what period is actually being set
+    std::cout << "DEBUG: PeriodicSenderHelper configured with period: " << packetInterval << "s" << std::endl;
+    
+    ApplicationContainer appContainer = appHelper.Install(endDevices);
+    
+    // EXPLICIT timing
+    double startTime = 1.1;
+    double stopTime = simulationTime * 60 - 0.1;
+    
+    std::cout << "DEBUG: Applications start time: " << startTime << "s" << std::endl;
+    std::cout << "DEBUG: Applications stop time: " << stopTime << "s" << std::endl;
+    std::cout << "DEBUG: Application duration: " << (stopTime - startTime) << "s = " 
+              << ((stopTime - startTime)/60.0) << " minutes" << std::endl;
+    std::cout << "DEBUG: Expected packets per device: " << ((stopTime - startTime) / packetInterval) + 1 << std::endl;
+    
+    // Check if there are duty cycle restrictions
+    std::cout << "DEBUG: Checking for duty cycle restrictions..." << std::endl;
+    double sf12AirTime = lora::CalculateAirTime(12); // SF12 airtime in ms
+    double dutyCycleUsage = (sf12AirTime / 1000.0) / packetInterval * 100.0; // % duty cycle per transmission
+    std::cout << "DEBUG: SF12 airtime: " << sf12AirTime << "ms" << std::endl;
+    std::cout << "DEBUG: Duty cycle per transmission: " << dutyCycleUsage << "%" << std::endl;
+    
+    if (dutyCycleUsage > 1.0) {
+        std::cout << "WARNING: Duty cycle usage (" << dutyCycleUsage 
+                  << "%) exceeds 1% EU868 limit!" << std::endl;
+        double minInterval = sf12AirTime / 10.0; // 1% duty cycle
+        std::cout << "WARNING: Minimum interval for 1% duty cycle: " << minInterval << "s" << std::endl;
+    }
+    
+    appContainer.Start(Seconds(startTime));
+    appContainer.Stop(Seconds(stopTime));
     
     // Run simulation
     Time totalSimulationTime = Seconds(simulationTime * 60);
     Simulator::Stop(totalSimulationTime);
+
+    // DEBUG: Show timing information
+    std::cout << "DEBUG: Simulation will stop at " << (simulationTime * 60) << " seconds" << std::endl;
+    std::cout << "DEBUG: Applications should stop at " << (simulationTime * 60 - 0.1) << " seconds" << std::endl;
 
     // Console output
     std::cout << "\n=== Scenario 2: ADR vs Fixed SF Comparison ===" << std::endl;
@@ -348,12 +405,17 @@ int main(int argc, char* argv[])
         std::cout << "Configuration: Fixed SF12, 14 dBm, NO ADAPTATION" << std::endl;
     }
     std::cout << "Packet interval: " << packetInterval << "s (staggered start times)" << std::endl;
-    std::cout << "Simulation time: " << simulationTime << " minutes" << std::endl;
+    std::cout << "Simulation time: " << simulationTime << " minutes (100 packets per device)" << std::endl;
     std::cout << "Starting simulation..." << std::endl;
 
     Simulator::Run();
 
+    double actualSimTime = Simulator::Now().GetSeconds();
     std::cout << "\n=== Simulation Complete ===" << std::endl;
+    std::cout << "DEBUG: Simulation actually ran for " << actualSimTime << " seconds (" 
+              << (actualSimTime/60.0) << " minutes)" << std::endl;
+    std::cout << "DEBUG: Expected to run for " << (simulationTime * 60) << " seconds (" 
+              << simulationTime << " minutes)" << std::endl;
     std::cout << "Total packets sent: " << g_totalSent << std::endl;
     std::cout << "Total packets received: " << g_totalReceived << std::endl;
     std::cout << "Total ADR commands: " << g_totalAdrCommands << std::endl;

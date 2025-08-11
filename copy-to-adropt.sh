@@ -1,33 +1,48 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# --- Paths (WSL/Linux style) ---
-SRC_BASE="/home/andrei/development/ns3-comparison-clean/ns-3-dev"
-DEST_BASE="/home/andrei/development/ns3-adropt-development/ns3-lorawan-adropt-project"
+# Source and destination (WSL paths)
+SRC="/home/andrei/development/ns3-comparison-clean/ns-3-dev"
+DST="/home/andrei/development/ns3-adropt-development/ns3-lorawan-adropt-project"
 SCRIPT_SRC="/home/andrei/development/fastrun.sh"
 
-# --- rsync options & excludes ---
-rsync_opts=(
-  -a --delete --human-readable --info=stats1,progress2
-  --exclude=".git" --exclude=".git/**"
-  --exclude=".svn" --exclude=".hg"
-  --exclude=".gitignore" --exclude=".gitattributes" --exclude=".gitmodules"
-  --exclude=".DS_Store" --exclude="Thumbs.db"
-  --exclude="*.swp" --exclude="*.swo"
-)
+copy_update() {
+  local s="$1" d="$2"
+  mkdir -p "$d"
+  find "$s" \
+    -type d \( -name .git -o -name .svn -o -name .hg \) -prune -o \
+    -type f \
+      ! -name '.DS_Store' \
+      ! -name 'Thumbs.db' \
+      ! -name '.gitignore' \
+      ! -name '.gitattributes' \
+      ! -name '.gitmodules' \
+    -print0 |
+  while IFS= read -r -d '' f; do
+    rel="${f#$s/}"
+    out="$d/$rel"
+    mkdir -p "$(dirname "$out")"
+    # Copy only if missing or content differs (don’t preserve mtime → Git will notice)
+    if [[ ! -e "$out" ]] || ! cmp -s "$f" "$out"; then
+      if [[ -x "$f" ]]; then mode=755; else mode=644; fi
+      install -D -m "$mode" "$f" "$out"
+      echo "updated: ${d##*/}/$rel"
+    fi
+  done
+}
 
-echo "Syncing scratch → scratch…"
-rsync "${rsync_opts[@]}" "$SRC_BASE/scratch/" "$DEST_BASE/scratch/"
+echo "Updating lorawan …"
+copy_update "$SRC/src/lorawan" "$DST/lorawan"
 
-echo "Syncing src/lorawan → lorawan…"
-rsync "${rsync_opts[@]}" "$SRC_BASE/src/lorawan/" "$DEST_BASE/lorawan/"
+echo "Updating scratch …"
+copy_update "$SRC/scratch" "$DST/scratch"
 
-echo "Copying fastrun.sh to project root…"
-install -D -m 755 "$SCRIPT_SRC" "$DEST_BASE/fastrun.sh"
-
-# Optional: normalize line endings if dos2unix is available
-if command -v dos2unix >/dev/null 2>&1; then
-  dos2unix -q "$DEST_BASE/fastrun.sh" || true
+echo "Updating fastrun.sh …"
+if [[ -f "$SCRIPT_SRC" ]]; then
+  install -D -m 755 "$SCRIPT_SRC" "$DST/fastrun.sh"
+  echo "updated: fastrun.sh"
+else
+  echo "warn: $SCRIPT_SRC not found, skipped."
 fi
 
 echo "Done."

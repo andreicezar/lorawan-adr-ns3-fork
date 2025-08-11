@@ -1,13 +1,16 @@
 #!/bin/bash
-#------------------------------------------------------------------------------
 # run-02.sh - Scenario 2: ADR Comparison
 set -euo pipefail
 
 echo "🔬 Scenario 2: ADR Comparison"
 echo "=============================="
-echo "📊 Config: 100 devices, 1 gateway, 20min, 30s intervals"
+echo "📊 Config: 100 devices, 1 gateway, 200min, 120s intervals (100 packets/device)"
 
 cd "$(dirname "$0")/../.."
+
+# Simulation parameters
+SIM_TIME=500
+PKT_INTERVAL=300
 
 FAILED_CASES=()
 
@@ -20,7 +23,8 @@ echo "🚀 Running simulation: ADR DISABLED (Fixed SF12)"
 echo "📁 Output directory: $output_folder_fixed"
 
 if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=20 \
+    --simulationTime=${SIM_TIME} \
+    --packetInterval=${PKT_INTERVAL} \
     --outputPrefix=$output_folder_fixed/result \
     --adrEnabled=false"; then
     echo "✅ Fixed SF12 case completed successfully"
@@ -38,7 +42,8 @@ echo "🚀 Running simulation: ADR ENABLED"
 echo "📁 Output directory: $output_folder_adr"
 
 if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=20 \
+    --simulationTime=${SIM_TIME} \
+    --packetInterval=${PKT_INTERVAL} \
     --outputPrefix=$output_folder_adr/result \
     --adrEnabled=true \
     --adrType=ns3::AdrComponent"; then
