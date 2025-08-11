@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Navigate to the NS-3 development directory
+cd ~/development/ns3-comparison-clean/ns-3-dev
+
+# 1. Clean
+echo "=== CLEAN BUILD ==="
+rm -rf build cmake-cache
+
+# 2. Configure
+echo "=== CONFIGURE ==="
+./ns3 configure --build-profile=debug --enable-examples --enable-tests
+
+# 3. Build
+echo "=== FIRST BUILD ==="
+./ns3 build
+
+# 4. Run all scenarios
+echo "=== RUN SIMULATION SCRIPT ==="
+bash scratch/scenario-01-baseline/run-01.sh
+# bash scratch/run-all.sh
+
+echo "=== ALL DONE ==="

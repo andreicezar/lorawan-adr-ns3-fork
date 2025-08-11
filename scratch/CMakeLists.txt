@@ -1,4 +1,7 @@
 set(target_prefix scratch_)
+# Make headers under scratch/ visible to all scratch targets,
+# so #include "common/lora_utils.h" works from any subfolder.
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
 function(create_scratch source_files)
   # Return early if no sources in the subdirectory

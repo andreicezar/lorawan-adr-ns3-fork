@@ -37,9 +37,6 @@ set(source_files
     model/lora-utils.cc
     model/adr-component.cc
     model/hex-grid-position-allocator.cc
-    model/adropt-component.cc
-    model/statistics-collector.cc
-    model/fec-component.cc
     helper/lora-radio-energy-model-helper.cc
     helper/lora-helper.cc
     helper/lora-phy-helper.cc
@@ -49,6 +46,7 @@ set(source_files
     helper/forwarder-helper.cc
     helper/network-server-helper.cc
     helper/lora-packet-tracker.cc
+    helper/comparison-scenarios.cc
 )
 
 set(header_files
@@ -90,9 +88,6 @@ set(header_files
     model/lora-utils.h
     model/adr-component.h
     model/hex-grid-position-allocator.h
-    model/adropt-component.h
-    model/statistics-collector.h
-    model/fec-component.h
     helper/lora-radio-energy-model-helper.h
     helper/lora-helper.h
     helper/lora-phy-helper.h
@@ -102,6 +97,7 @@ set(header_files
     helper/forwarder-helper.h
     helper/network-server-helper.h
     helper/lora-packet-tracker.h
+    helper/comparison-scenarios.h
     test/utilities.h
 )
 

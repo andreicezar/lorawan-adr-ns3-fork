@@ -51,7 +51,7 @@ AdrComponent::GetTypeId()
                                           "min"))
             .AddAttribute("HistoryRange",
                           "Number of packets to use for averaging",
-                          IntegerValue(4),
+                          IntegerValue(20),
                           MakeIntegerAccessor(&AdrComponent::historyRange),
                           MakeIntegerChecker<int>(0, 100))
             .AddAttribute("ChangeTransmissionPower",
