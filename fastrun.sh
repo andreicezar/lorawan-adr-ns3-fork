@@ -18,6 +18,7 @@ echo "=== FIRST BUILD ==="
 # 4. Run all scenarios
 echo "=== RUN SIMULATION SCRIPT ==="
 bash scratch/scenario-01-baseline/run-01.sh
+# bash scratch/scenario-04-confirmed-messages/run-04.sh 
 # bash scratch/run-all.sh
 
 echo "=== ALL DONE ==="
