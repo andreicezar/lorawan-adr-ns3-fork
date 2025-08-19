@@ -50,7 +50,9 @@ for NGW in "${GATEWAY_COUNTS[@]}"; do
 
   if ./ns3 run "${SCENARIO_PATH} \
       --nGateways=${NGW} \
-      --simulationTime=${SIMULATION_TIME} \
+      --simulationTime=${SIMULATION_TIME} \    
+      --positionFile=scenario_positions.csv \
+      --useFilePositions=true \
       --nDevices=${N_DEVICES} \
       --gatewaySpacing=${GATEWAY_SPACING} \
       --outputPrefix=${CASE_DIR}/result"; then

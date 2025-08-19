@@ -21,7 +21,9 @@ for EXP in 3.2 3.5 3.76 4.0; do
     echo "📁 Output directory: $output_folder"
 
     if ./ns3 run "scratch/scenario-07-propagation-models/scenario-07-propagation-models \
-        --simulationTime=120 \
+        --simulationTime=120 \    
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
         --maxDistance=5000 \
         --propagationModel=LogDistance \
         --pathLossExponent=${EXP} \

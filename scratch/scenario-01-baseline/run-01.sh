@@ -5,6 +5,7 @@ set -euo pipefail
 echo "🔬 Scenario 1: Baseline Reference Case"
 echo "======================================"
 echo "📊 Config: 100 devices, 1 gateway, SF10 fixed, 600min"
+echo "📍 Using positions from: all_positions.csv"
 
 cd "$(dirname "$0")/../.."
 
@@ -19,6 +20,8 @@ echo "📁 Output directory: $output_folder"
 # Run simulation
 if ./ns3 run "scratch/scenario-01-baseline/scenario-01-baseline \
     --simulationTime=600 \
+    --positionFile=scenario_positions.csv \
+    --useFilePositions=true \
     --outputPrefix=$output_folder/result"; then
     echo "✅ Scenario 1 completed successfully!"
     echo "📈 Results available in $output_folder/"

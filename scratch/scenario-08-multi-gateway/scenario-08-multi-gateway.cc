@@ -38,6 +38,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario08MultiGateway");
 
+#include "common/position_loader.h"
 // ============================================================================
 // GLOBALS
 // ============================================================================
@@ -262,6 +263,8 @@ int main(int argc, char* argv[])
     double gatewaySpacing = 2000; // meters between GWs
     double areaSize = 3000;       // m (square side)
     std::string outputPrefix = "scenario08_multi_gateway";
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("nGateways", "Number of gateways (1, 2, 4)", nGateways);
@@ -269,6 +272,8 @@ int main(int argc, char* argv[])
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("gatewaySpacing", "Distance between gateways (m)", gatewaySpacing);
     cmd.AddValue("nDevices", "Number of devices", nDevices);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     if (nGateways != 1 && nGateways != 2 && nGateways != 4) {
@@ -301,16 +306,21 @@ int main(int argc, char* argv[])
     endDevices.Create(nDevices);
 
     // End devices uniformly in a square area
-    MobilityHelper mobEd;
-    mobEd.SetPositionAllocator("ns3::RandomRectanglePositionAllocator",
-                               "X", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
-                                     "Min", DoubleValue(-areaSize/2), "Max", DoubleValue(areaSize/2))),
-                               "Y", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
-                                     "Min", DoubleValue(-areaSize/2), "Max", DoubleValue(areaSize/2))));
-    mobEd.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobEd.Install(endDevices);
-
-    PlaceGateways(gateways, nGateways, gatewaySpacing);
+    std::string scenarioName = std::string("scenario_08_multigw_") + std::to_string(nGateways) + "gw";
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, areaSize, scenarioName, positionFile);
+    } else {
+        // End devices uniformly in a square area (original behavior)
+        MobilityHelper mobEd;
+        mobEd.SetPositionAllocator("ns3::RandomRectanglePositionAllocator",
+                                   "X", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
+                                         "Min", DoubleValue(-areaSize/2), "Max", DoubleValue(areaSize/2))),
+                                   "Y", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
+                                         "Min", DoubleValue(-areaSize/2), "Max", DoubleValue(areaSize/2))));
+        mobEd.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+        mobEd.Install(endDevices);
+        PlaceGateways(gateways, nGateways, gatewaySpacing);
+    }
 
     // --- LoRa stack & server via common helpers ---
     const uint8_t dataRate = 2; // DR2 (SF10 EU868)

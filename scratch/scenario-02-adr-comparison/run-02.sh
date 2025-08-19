@@ -23,7 +23,9 @@ echo "🚀 Running simulation: ADR DISABLED (Fixed SF12)"
 echo "📁 Output directory: $output_folder_fixed"
 
 if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=${SIM_TIME} \
+    --simulationTime=${SIM_TIME} \    
+    --positionFile=scenario_positions.csv \
+    --useFilePositions=true \
     --packetInterval=${PKT_INTERVAL} \
     --outputPrefix=$output_folder_fixed/result \
     --adrEnabled=false"; then
@@ -42,7 +44,9 @@ echo "🚀 Running simulation: ADR ENABLED"
 echo "📁 Output directory: $output_folder_adr"
 
 if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=${SIM_TIME} \
+    --simulationTime=${SIM_TIME} \    
+    --positionFile=scenario_positions.csv \
+    --useFilePositions=true \
     --packetInterval=${PKT_INTERVAL} \
     --outputPrefix=$output_folder_adr/result \
     --adrEnabled=true \

@@ -34,6 +34,8 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario01Baseline");
 
+#include "common/position_loader.h"
+
 // ==============================================================================
 // GLOBAL VARIABLES
 // ==============================================================================
@@ -171,10 +173,14 @@ int main(int argc, char* argv[]) {
     int simulationTime = 10; // minutes
     int packetInterval = 600; // seconds
     std::string outputPrefix = "scenario01_baseline";
-    
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Logging
@@ -187,7 +193,14 @@ int main(int argc, char* argv[]) {
     
     // Setup network using standardized functions
     Ptr<LoraChannel> channel = SetupStandardChannel();
-    SetupStandardMobility(endDevices, gateways);
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, 5000, "scenario_01_baseline", positionFile);
+    } else {
+        // Use original random placement with fixed seed for reproducibility
+        RngSeedManager::SetSeed(12345);
+        RngSeedManager::SetRun(1);
+        SetupStandardMobility(endDevices, gateways, 5000);
+    }
     SetupStandardLoRa(endDevices, gateways, channel, 2); // DR2 = SF10
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     

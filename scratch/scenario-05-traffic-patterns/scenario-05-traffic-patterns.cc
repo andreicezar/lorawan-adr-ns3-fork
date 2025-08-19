@@ -35,6 +35,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario05TrafficPatterns");
 
+#include "common/position_loader.h"
 // ==============================================================================
 // GLOBAL VARIABLES
 // ==============================================================================
@@ -207,12 +208,16 @@ int main(int argc, char* argv[])
     double sideLengthMeters = 5000; // 5km x 5km area
     double maxRandomLossDb = 5.0;
     std::string outputPrefix = "scenario05_traffic_patterns";
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
     
     CommandLine cmd(__FILE__);
     cmd.AddValue("packetInterval", "Packet interval in seconds (600, 300, 60)", packetInterval);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("nDevices", "Number of devices", nDevices);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Store the current packet interval for analysis
@@ -228,7 +233,14 @@ int main(int argc, char* argv[])
     
     // Setup network using standardized functions
     Ptr<LoraChannel> channel = SetupStandardChannel(maxRandomLossDb);
-    SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, sideLengthMeters,
+                              "scenario_05_traffic", positionFile);
+    } else {
+        RngSeedManager::SetSeed(12349);
+        RngSeedManager::SetRun(1);
+        SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    }
     SetupStandardLoRa(endDevices, gateways, channel, 2); // DR2 = SF10
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     

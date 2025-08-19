@@ -34,6 +34,8 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario02AdrComparison");
 
+#include "common/position_loader.h"
+
 // ==============================================================================
 // GLOBAL VARIABLES (Scenario 2 specific)
 // ==============================================================================
@@ -295,11 +297,12 @@ int main(int argc, char* argv[])
     int nGateways = 1;
     int simulationTime = 200; // minutes (for exactly 100 packets per device)
     int packetInterval = 120; // seconds - 100 packets per device
-    double sideLengthMeters = 5000; // 5km x 5km area
     double maxRandomLossDb = 5.0;
     bool adrEnabled = false; // Default to fixed SF, can be overridden
     std::string adrType = "ns3::AdrComponent";
     std::string outputPrefix = "scenario02_adr_comparison";
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
     
     CommandLine cmd(__FILE__);
     cmd.AddValue("adrEnabled", "Enable ADR (true) or use Fixed SF12 (false)", adrEnabled);
@@ -307,6 +310,8 @@ int main(int argc, char* argv[])
     cmd.AddValue("packetInterval", "Packet interval in seconds", packetInterval);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("adrType", "ADR algorithm type", adrType);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // DEBUG: Print actual parameter values being used
@@ -333,7 +338,14 @@ int main(int argc, char* argv[])
     Ptr<LoraChannel> channel = SetupStandardChannel(maxRandomLossDb);
     
     // Setup mobility
-    SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, 5000, "scenario_02_adr", positionFile);
+     } else {
+        // Use original random placement with fixed seed for reproducibility
+        RngSeedManager::SetSeed(12345);
+        RngSeedManager::SetRun(1);
+        SetupStandardMobility(endDevices, gateways, 5000);
+    }
     
     // Setup LoRa with initial SF12 (DR0) for both cases
     SetupStandardLoRa(endDevices, gateways, channel, 0); // DR0 = SF12

@@ -20,7 +20,9 @@ for SF in 7 10 12; do
     echo "📁 Output directory: $output_folder"
     
     if ./ns3 run "scratch/scenario-06-collision-capture/scenario-06-collision-capture \
-        --simulationTime=170 \
+        --simulationTime=170 \    
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
         --spreadingFactor=$SF \
         --outputPrefix=$output_folder/result \
         --packetInterval=60"; then

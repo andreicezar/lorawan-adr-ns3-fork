@@ -19,7 +19,9 @@ for INTERVAL in 600 300 60; do
     echo "📁 Output directory: $output_folder"
     
     if ./ns3 run "scratch/scenario-05-traffic-patterns/scenario-05-traffic-patterns \
-        --simulationTime=$((40 * INTERVAL / 60)) \
+        --simulationTime=$((40 * INTERVAL / 60)) \    
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
         --packetInterval=$INTERVAL \
         --outputPrefix=$output_folder/result"; then
         echo "✅ ${INTERVAL}s interval completed successfully"

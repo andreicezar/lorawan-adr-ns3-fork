@@ -35,6 +35,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario03SfImpact");
 
+#include "common/position_loader.h"
 // ==============================================================================
 // GLOBAL VARIABLES
 // ==============================================================================
@@ -218,13 +219,17 @@ int main(int argc, char* argv[])
     double maxRandomLossDb = 3.0;
     uint8_t spreadingFactor = 10; // Default SF10, can be overridden
     std::string outputPrefix = "scenario03_sf_impact";
-    
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("spreadingFactor", "Spreading Factor to test (7-12)", spreadingFactor);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("nDevices", "Number of devices", nDevices);
     cmd.AddValue("packetInterval", "Packet interval in seconds", packetInterval);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Validate SF range
@@ -246,7 +251,14 @@ int main(int argc, char* argv[])
     
     // Setup network using standardized functions
     Ptr<LoraChannel> channel = SetupStandardChannel(maxRandomLossDb);
-    SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, sideLengthMeters,
+                            "scenario_03_sf_impact", positionFile);
+    } else {
+        RngSeedManager::SetSeed(12347);
+        RngSeedManager::SetRun(1);
+        SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    }
     
     // Convert SF to DR for EU868
     uint8_t dataRate = lora::DrFromSfEu868(spreadingFactor);

@@ -19,7 +19,9 @@ echo "🚀 Running simulation: UNCONFIRMED messages"
 echo "📁 Output directory: $output_folder_unconf"
 
 if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
-    --simulationTime=80 \
+    --simulationTime=80 \    
+    --positionFile=scenario_positions.csv \
+    --useFilePositions=true \
     --confirmedMessages=false \
     --outputPrefix=$output_folder_unconf/result"; then
     echo "✅ Unconfirmed case completed successfully"
@@ -37,7 +39,9 @@ echo "🚀 Running simulation: CONFIRMED messages"
 echo "📁 Output directory: $output_folder_conf"
 
 if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
-    --simulationTime=80 \
+    --simulationTime=80 \    
+    --positionFile=scenario_positions.csv \
+    --useFilePositions=true \
     --confirmedMessages=true \
     --outputPrefix=$output_folder_conf/result"; then
     echo "✅ Confirmed case completed successfully"

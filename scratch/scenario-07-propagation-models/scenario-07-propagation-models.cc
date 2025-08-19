@@ -25,6 +25,7 @@
 #include "common/lora_utils.h"       // PHY/RF math (RSSI/SNR/ToA etc.)
 #include "common/scenario_utils.h"   // Standardized setup + CSV/validation
 
+
 #include <fstream>
 #include <iomanip>
 #include <cmath>
@@ -35,6 +36,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario07PropagationModels");
 
+#include "common/position_loader.h"
 // ============================================================================
 // GLOBALS (standardized across scenarios)
 // ============================================================================
@@ -221,6 +223,8 @@ int main(int argc, char* argv[])
     std::string propagationModel = "LogDistance";  // LogDistance | FreeSpace
     double pathLossExponent = 3.76;
     std::string outputPrefix = "scenario07_propagation";
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("propagationModel", "Propagation model (LogDistance, FreeSpace)", propagationModel);
@@ -228,6 +232,8 @@ int main(int argc, char* argv[])
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("maxDistance", "Maximum test distance in meters", maxDistance);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs radial random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     g_propagationModel = propagationModel;
@@ -260,21 +266,23 @@ int main(int argc, char* argv[])
     gateways.Create(nGateways);
     endDevices.Create(nDevices);
 
-    MobilityHelper mobEd, mobGw;
-    mobEd.SetPositionAllocator("ns3::RandomDiscPositionAllocator",
-                               "X", DoubleValue(0.0),
-                               "Y", DoubleValue(0.0),
-                               "Rho", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
-                                   "Min", DoubleValue(100.0),
-                                   "Max", DoubleValue(maxDistance))));
-    mobEd.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobEd.Install(endDevices);
-
-    Ptr<ListPositionAllocator> gwPosAlloc = CreateObject<ListPositionAllocator>();
-    gwPosAlloc->Add(Vector(0.0, 0.0, 15.0));
-    mobGw.SetPositionAllocator(gwPosAlloc);
-    mobGw.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mobGw.Install(gateways);
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, maxDistance,
+                              "scenario_07_propagation", positionFile);
+    } else {
+        MobilityHelper mobEd, mobGw;
+        mobEd.SetPositionAllocator("ns3::RandomDiscPositionAllocator",
+                                   "X", DoubleValue(0.0),
+                                   "Y", DoubleValue(0.0),
+                                   "Rho", PointerValue(CreateObjectWithAttributes<UniformRandomVariable>(
+                                       "Min", DoubleValue(100.0),
+                                       "Max", DoubleValue(maxDistance))));
+                Ptr<ListPositionAllocator> gwPosAlloc = CreateObject<ListPositionAllocator>();
+        gwPosAlloc->Add(Vector(0.0, 0.0, 15.0));
+        mobGw.SetPositionAllocator(gwPosAlloc);
+        mobGw.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+        mobGw.Install(gateways);
+    }
 
     // --- LoRa stack & server via common helpers ---
     const uint8_t dataRate = 2; // DR2 = SF10 (EU868)

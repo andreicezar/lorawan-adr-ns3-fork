@@ -19,7 +19,9 @@ for SF in {7..12}; do
     echo "📁 Output directory: $output_folder"
     
     if ./ns3 run "scratch/scenario-03-sf-impact/scenario-03-sf-impact \
-        --simulationTime=200 \
+        --simulationTime=200 \    
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
         --spreadingFactor=$SF \
         --outputPrefix=$output_folder/result \
         --nDevices=50 \

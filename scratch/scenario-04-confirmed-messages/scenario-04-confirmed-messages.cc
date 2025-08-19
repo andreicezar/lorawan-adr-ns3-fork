@@ -34,6 +34,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario04ConfirmedMessages");
 
+#include "common/position_loader.h"
 // ==============================================================================
 // GLOBAL VARIABLES
 // ==============================================================================
@@ -216,16 +217,18 @@ int main(int argc, char* argv[])
     int nGateways = 1;
     int simulationTime = 20; // minutes (longer for retransmission observation)
     int packetInterval = 120; // seconds (2 min intervals for confirmed message testing)
-    double sideLengthMeters = 5000; // 5km x 5km area
     double maxRandomLossDb = 5.0;
     bool confirmedMessages = false; // Command line parameter
     std::string outputPrefix = "scenario04_confirmed_messages";
-    
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("confirmedMessages", "Use confirmed messages (true) or unconfirmed (false)", confirmedMessages);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("packetInterval", "Packet interval in seconds", packetInterval);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Store mode for callback reference
@@ -241,7 +244,14 @@ int main(int argc, char* argv[])
     
     // Setup network using standardized functions
     Ptr<LoraChannel> channel = SetupStandardChannel(maxRandomLossDb);
-    SetupStandardMobility(endDevices, gateways, sideLengthMeters);
+    // Setup mobility (NEW)
+    if (useFilePositions) {
+        SetupMobilityFromFile(endDevices, gateways, 5000, "scenario_04_confirmed", positionFile);
+    } else {
+        RngSeedManager::SetSeed(12348);
+        RngSeedManager::SetRun(1);
+        SetupStandardMobility(endDevices, gateways, 5000);
+    }
     SetupStandardLoRa(endDevices, gateways, channel, 2); // DR2 = SF10
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     

@@ -35,6 +35,7 @@ using namespace lorawan;
 
 NS_LOG_COMPONENT_DEFINE("Scenario06CollisionCapture");
 
+#include "common/position_loader.h"
 // ==============================================================================
 // GLOBAL VARIABLES
 // ==============================================================================
@@ -118,8 +119,14 @@ void OnGatewayReceive(Ptr<const Packet> packet)
 // CUSTOM MOBILITY SETUP FOR CAPTURE EFFECT TESTING
 // ==============================================================================
 
-void SetupCaptureTestMobility(NodeContainer& endDevices, NodeContainer& gateways) {
+void SetupCaptureTestMobility(NodeContainer& endDevices, NodeContainer& gateways,
+                            const std::string& positionFile, bool useFile) {
     // Gateway at center
+        if (useFile) {
+        SetupMobilityFromFile(endDevices, gateways, 1000, "scenario_06_collision", positionFile);
+        std::cout << "✅ Using positions from file: " << positionFile << std::endl; return;
+    }
+    // Gateway at center (original behavior)
     Ptr<ListPositionAllocator> positionAllocGw = CreateObject<ListPositionAllocator>();
     positionAllocGw->Add(Vector(0.0, 0.0, 15.0));
     MobilityHelper mobilityGw;
@@ -290,13 +297,16 @@ int main(int argc, char* argv[])
     double maxRandomLossDb = 3.0; // Reduced randomness for clearer collision analysis
     uint8_t spreadingFactor = 10; // Command line parameter: test different SFs
     std::string outputPrefix = "scenario06_collision_capture";
-    
+    std::string positionFile = "scenario_positions.csv";
+    bool useFilePositions = true;
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("spreadingFactor", "Spreading Factor to test (7-12)", spreadingFactor);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("packetInterval", "Packet interval in seconds", packetInterval);
     cmd.AddValue("nDevices", "Number of devices", nDevices);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Validate SF range
@@ -320,7 +330,7 @@ int main(int argc, char* argv[])
     Ptr<LoraChannel> channel = SetupStandardChannel(maxRandomLossDb);
     
     // Use CUSTOM mobility setup for capture effect testing
-    SetupCaptureTestMobility(endDevices, gateways);
+    SetupCaptureTestMobility(endDevices, gateways, positionFile, useFilePositions);
     
     // Convert SF to DR and setup LoRa
     uint8_t dataRate = lora::DrFromSfEu868(spreadingFactor);
