@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 Generate consistent device and gateway positions for all ns-3 LoRaWAN scenarios.
-These positions can be used in both ns-3 and OMNeT++ FLoRa for fair comparison.
+Scenarios with the same number of devices and topology type use identical positions
+to ensure fair comparison of protocol features.
 """
 
 import numpy as np
@@ -136,9 +137,55 @@ def get_gateway_positions(n_gateways: int, spacing: float = 2000) -> np.ndarray:
     else:
         raise ValueError(f"Unsupported number of gateways: {n_gateways}")
 
+def generate_base_device_positions(base_seed: int = DEFAULT_SEED) -> Dict:
+    """
+    Generate base device position sets that will be reused across scenarios.
+    This ensures scenarios with the same number of devices use identical positions.
+    
+    Args:
+        base_seed: Base random seed to use
+    
+    Returns:
+        Dictionary with position sets for different device counts and types
+    """
+    position_sets = {}
+    
+    # Standard uniform distributions for protocol comparison scenarios
+    # These will be reused across scenarios testing different protocol features
+    
+    # 100 devices - uniform 5km area (for baseline, ADR, confirmed, traffic scenarios)
+    set_seed(base_seed + 100)
+    position_sets['uniform_100_5km'] = generate_uniform_square_positions(100, 5000)
+    print("🔄 Generated standard 100-device positions (5km area)")
+    
+    # 50 devices - uniform 3km area (for SF impact scenario)
+    set_seed(base_seed + 50)
+    position_sets['uniform_50_3km'] = generate_uniform_square_positions(50, 3000)
+    print("🔄 Generated standard 50-device positions (3km area)")
+    
+    # 200 devices - uniform 3km area (for multi-gateway scenarios)
+    set_seed(base_seed + 200)
+    position_sets['uniform_200_3km'] = generate_uniform_square_positions(200, 3000)
+    print("🔄 Generated standard 200-device positions (3km area)")
+    
+    # Special topology-specific position sets
+    # These are used for scenarios that specifically test topology effects
+    
+    # 20 devices - near/far rings (for collision/capture effect testing)
+    set_seed(base_seed + 20)
+    position_sets['nearfar_20'] = generate_near_far_rings(20, 50, 150, 450, 500)
+    print("🔄 Generated near/far ring 20-device positions (collision testing)")
+    
+    # 50 devices - radial pattern (for propagation model testing)
+    set_seed(base_seed + 51)  # Different from uniform_50 to avoid confusion
+    position_sets['radial_50'] = generate_radial_positions(50, 100, 5000)
+    print("🔄 Generated radial 50-device positions (propagation testing)")
+    
+    return position_sets
+
 def generate_scenario_positions(base_seed: int = DEFAULT_SEED) -> Dict:
     """
-    Generate positions for all scenarios.
+    Generate positions for all scenarios using consistent position sets.
     
     Args:
         base_seed: Base random seed to use
@@ -146,101 +193,101 @@ def generate_scenario_positions(base_seed: int = DEFAULT_SEED) -> Dict:
     Returns:
         Dictionary with scenario names as keys and position data as values
     """
+    # First, generate the base position sets
+    print("📍 Generating base position sets for consistent comparisons...")
+    position_sets = generate_base_device_positions(base_seed)
+    
     scenarios = {}
     
-    # Reset seed for each scenario to ensure consistency
+    print("\n🎯 Assigning positions to scenarios...")
     
-    # Scenario 1: Baseline (100 devices, 1 gateway, 5km area assumed)
-    set_seed(base_seed + 1)
-    scenarios['scenario_01_baseline'] = {
-        'devices': 100,
-        'gateways': 1,
-        'area_size': 5000,
-        'device_positions': generate_uniform_square_positions(100, 5000),
-        'gateway_positions': get_gateway_positions(1)
-    }
+    # Protocol comparison scenarios - these use IDENTICAL positions
+    # Only protocol settings differ, not node placement
+    protocol_scenarios = [
+        ('scenario_01_baseline', 'Baseline configuration'),
+        ('scenario_02_adr', 'ADR enabled'),
+        ('scenario_04_confirmed', 'Confirmed messages'),
+        ('scenario_05_traffic', 'Different traffic patterns')
+    ]
     
-    # Scenario 2: ADR Comparison (100 devices, 1 gateway, 5km area)
-    set_seed(base_seed + 2)
-    scenarios['scenario_02_adr'] = {
-        'devices': 100,
-        'gateways': 1,
-        'area_size': 5000,
-        'device_positions': generate_uniform_square_positions(100, 5000),
-        'gateway_positions': get_gateway_positions(1)
-    }
+    for scenario_name, description in protocol_scenarios:
+        scenarios[scenario_name] = {
+            'devices': 100,
+            'gateways': 1,
+            'area_size': 5000,
+            'device_positions': position_sets['uniform_100_5km'].copy(),  # Same positions!
+            'gateway_positions': get_gateway_positions(1),
+            'description': description,
+            'position_type': 'uniform_100_5km'
+        }
+        print(f"  ✅ {scenario_name}: {description} (shared 100-device positions)")
     
-    # Scenario 3: SF Impact (50 devices, 1 gateway, 3km area)
-    set_seed(base_seed + 3)
+    # SF Impact scenario - different area size but consistent positions
     scenarios['scenario_03_sf_impact'] = {
         'devices': 50,
         'gateways': 1,
         'area_size': 3000,
-        'device_positions': generate_uniform_square_positions(50, 3000),
-        'gateway_positions': get_gateway_positions(1)
+        'device_positions': position_sets['uniform_50_3km'].copy(),
+        'gateway_positions': get_gateway_positions(1),
+        'description': 'Spreading Factor impact testing',
+        'position_type': 'uniform_50_3km'
     }
+    print(f"  ✅ scenario_03_sf_impact: SF impact testing (dedicated 50-device positions)")
     
-    # Scenario 4: Confirmed Messages (100 devices, 1 gateway, 5km area)
-    set_seed(base_seed + 4)
-    scenarios['scenario_04_confirmed'] = {
-        'devices': 100,
-        'gateways': 1,
-        'area_size': 5000,
-        'device_positions': generate_uniform_square_positions(100, 5000),
-        'gateway_positions': get_gateway_positions(1)
-    }
-    
-    # Scenario 5: Traffic Patterns (100 devices, 1 gateway, 5km area)
-    set_seed(base_seed + 5)
-    scenarios['scenario_05_traffic'] = {
-        'devices': 100,
-        'gateways': 1,
-        'area_size': 5000,
-        'device_positions': generate_uniform_square_positions(100, 5000),
-        'gateway_positions': get_gateway_positions(1)
-    }
-    
-    # Scenario 6: Collision Capture (20 devices, 1 gateway, near/far rings)
-    set_seed(base_seed + 6)
+    # Topology-specific scenarios - these NEED different positions by design
     scenarios['scenario_06_collision'] = {
         'devices': 20,
         'gateways': 1,
-        'area_size': 1000,  # effective area
-        'device_positions': generate_near_far_rings(20, 50, 150, 450, 500),
-        'gateway_positions': get_gateway_positions(1)
+        'area_size': 1000,
+        'device_positions': position_sets['nearfar_20'].copy(),
+        'gateway_positions': get_gateway_positions(1),
+        'description': 'Collision/capture effect testing (near/far topology)',
+        'position_type': 'nearfar_20'
     }
+    print(f"  ✅ scenario_06_collision: Collision testing (special near/far topology)")
     
-    # Scenario 7: Propagation Models (50 devices, 1 gateway, radial 100-5000m)
-    set_seed(base_seed + 7)
     scenarios['scenario_07_propagation'] = {
         'devices': 50,
         'gateways': 1,
-        'area_size': 10000,  # diameter
-        'device_positions': generate_radial_positions(50, 100, 5000),
-        'gateway_positions': get_gateway_positions(1)
+        'area_size': 10000,
+        'device_positions': position_sets['radial_50'].copy(),
+        'gateway_positions': get_gateway_positions(1),
+        'description': 'Propagation model testing (radial topology)',
+        'position_type': 'radial_50'
     }
+    print(f"  ✅ scenario_07_propagation: Propagation testing (special radial topology)")
     
-    # Scenario 8: Multi-Gateway (200 devices, multiple gateway configs)
-    # We'll generate for all three configurations
-    for n_gw in [1, 2, 4]:
-        set_seed(base_seed + 8 + n_gw)
-        scenarios[f'scenario_08_multigw_{n_gw}gw'] = {
+    # Multi-gateway scenarios - these use IDENTICAL device positions
+    # Only gateway configuration differs, not device placement
+    multi_gw_configs = [
+        (1, 'Single gateway'),
+        (2, 'Dual gateway'),
+        (4, 'Quad gateway')
+    ]
+    
+    for n_gw, description in multi_gw_configs:
+        scenario_name = f'scenario_08_multigw_{n_gw}gw'
+        scenarios[scenario_name] = {
             'devices': 200,
             'gateways': n_gw,
             'area_size': 3000,
-            'device_positions': generate_uniform_square_positions(200, 3000),
-            'gateway_positions': get_gateway_positions(n_gw, spacing=2000)
+            'device_positions': position_sets['uniform_200_3km'].copy(),  # Same device positions!
+            'gateway_positions': get_gateway_positions(n_gw, spacing=2000),
+            'description': f'Multi-gateway testing: {description}',
+            'position_type': 'uniform_200_3km'
         }
+        print(f"  ✅ {scenario_name}: {description} (shared 200-device positions)")
     
     return scenarios
 
-def export_positions_to_csv(scenarios: Dict, output_file: str):
+def export_positions_to_csv(scenarios: Dict, output_file: str, base_seed: int):
     """
-    Export all scenario positions to a single CSV file.
+    Export all scenario positions to a single CSV file with metadata.
     
     Args:
         scenarios: Dictionary with scenario data
         output_file: Output CSV filename
+        base_seed: Random seed used for generation
     """
     all_data = []
     
@@ -269,12 +316,49 @@ def export_positions_to_csv(scenarios: Dict, output_file: str):
     
     df = pd.DataFrame(all_data)
     df.to_csv(output_file, index=False, float_format='%.2f')
-    print(f"✅ Positions exported to {output_file}")
+    print(f"\n✅ Positions exported to {output_file}")
     
-    # Print summary
+    # Create a metadata file
+    metadata_file = output_file.replace('.csv', '_metadata.txt')
+    with open(metadata_file, 'w') as f:
+        f.write(f"# LoRaWAN Scenario Positions Metadata\n")
+        f.write(f"# Generated with seed: {base_seed}\n")
+        f.write(f"# Generation strategy: Consistent positions for fair protocol comparison\n\n")
+        
+        # Group scenarios by position type
+        position_groups = {}
+        for scenario_name, data in scenarios.items():
+            pos_type = data.get('position_type', 'unknown')
+            if pos_type not in position_groups:
+                position_groups[pos_type] = []
+            position_groups[pos_type].append((scenario_name, data))
+        
+        f.write("## Position Sharing Strategy:\n\n")
+        for pos_type, group_scenarios in position_groups.items():
+            f.write(f"### {pos_type.upper()}:\n")
+            f.write(f"  Scenarios using identical device positions:\n")
+            for scenario_name, data in group_scenarios:
+                f.write(f"    - {scenario_name}: {data.get('description', 'No description')}\n")
+            f.write(f"  Device count: {group_scenarios[0][1]['devices']}\n")
+            f.write(f"  Rationale: {'Fair protocol comparison' if len(group_scenarios) > 1 else 'Topology-specific testing'}\n\n")
+    
+    print(f"📋 Metadata exported to {metadata_file}")
+    
+    # Print summary with position sharing info
     print("\n📊 Summary of generated positions:")
+    position_groups = {}
     for scenario_name, data in scenarios.items():
-        print(f"  {scenario_name}: {data['devices']} devices, {data['gateways']} gateway(s)")
+        pos_type = data.get('position_type', 'unknown')
+        if pos_type not in position_groups:
+            position_groups[pos_type] = []
+        position_groups[pos_type].append(scenario_name)
+    
+    for pos_type, scenario_list in position_groups.items():
+        print(f"\n  {pos_type.upper()}: {len(scenario_list)} scenario(s)")
+        for scenario_name in scenario_list:
+            data = scenarios[scenario_name]
+            shared_indicator = "🔗" if len(scenario_list) > 1 else "🎯"
+            print(f"    {shared_indicator} {scenario_name}: {data['devices']} devices, {data['gateways']} gateway(s)")
 
 def export_positions_per_scenario(scenarios: Dict, output_dir: str, base_seed: int):
     """
@@ -292,6 +376,8 @@ def export_positions_per_scenario(scenarios: Dict, output_dir: str, base_seed: i
         with open(filename, 'w') as f:
             f.write(f"# {scenario_name} positions\n")
             f.write(f"# Format: type,id,x,y,z\n")
+            f.write(f"# Description: {data.get('description', 'No description')}\n")
+            f.write(f"# Position type: {data.get('position_type', 'unknown')}\n")
             f.write(f"# Devices: {data['devices']}, Gateways: {data['gateways']}\n")
             f.write(f"# Area size: {data['area_size']}m\n")
             f.write(f"# Random seed: {base_seed}\n\n")
@@ -317,34 +403,44 @@ def visualize_scenario(scenario_name: str, data: Dict):
     try:
         import matplotlib.pyplot as plt
         
-        fig, ax = plt.subplots(figsize=(8, 8))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         # Plot devices
         dev_pos = data['device_positions']
-        ax.scatter(dev_pos[:, 0], dev_pos[:, 1], s=20, alpha=0.6, 
-                  label=f"End Devices ({data['devices']})")
+        ax.scatter(dev_pos[:, 0], dev_pos[:, 1], s=30, alpha=0.6, 
+                  label=f"End Devices ({data['devices']})", color='blue')
         
         # Plot gateways
         gw_pos = data['gateway_positions']
         ax.scatter(gw_pos[:, 0], gw_pos[:, 1], s=200, marker='^', 
-                  color='red', label=f"Gateway(s) ({data['gateways']})")
+                  color='red', label=f"Gateway(s) ({data['gateways']})", 
+                  edgecolors='black', linewidth=2)
         
-        ax.set_xlabel('X Position (m)')
-        ax.set_ylabel('Y Position (m)')
-        ax.set_title(f'{scenario_name} - Device Placement')
-        ax.legend()
+        # Add position type and description info
+        pos_type = data.get('position_type', 'unknown')
+        description = data.get('description', 'No description')
+        
+        ax.set_xlabel('X Position (m)', fontsize=12)
+        ax.set_ylabel('Y Position (m)', fontsize=12)
+        ax.set_title(f'{scenario_name}\n{description}\nPosition type: {pos_type}', fontsize=14)
+        ax.legend(fontsize=11)
         ax.grid(True, alpha=0.3)
         ax.axis('equal')
         
+        # Add statistics
+        stats_text = f"Devices: {data['devices']}\nGateways: {data['gateways']}\nArea: {data['area_size']}m"
+        ax.text(0.02, 0.98, stats_text, transform=ax.transAxes, 
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+        
         plt.tight_layout()
-        plt.savefig(f'{scenario_name}_topology.png', dpi=100)
+        plt.savefig(f'{scenario_name}_topology.png', dpi=150, bbox_inches='tight')
         plt.close()
         print(f"  📈 Visualization saved: {scenario_name}_topology.png")
     except ImportError:
         pass  # matplotlib not available
 
 def main():
-    parser = argparse.ArgumentParser(description='Generate LoRaWAN scenario positions')
+    parser = argparse.ArgumentParser(description='Generate LoRaWAN scenario positions with consistent placement')
     parser.add_argument('--output', default='scenario_positions.csv',
                        help='Output CSV filename (default: scenario_positions.csv)')
     parser.add_argument('--output-dir', default='positions',
@@ -361,15 +457,16 @@ def main():
     # Use the provided seed
     seed_to_use = args.seed
     
-    print(f"🔧 Generating positions with seed: {seed_to_use}")
-    print("=" * 60)
+    print(f"🔧 Generating CONSISTENT positions with seed: {seed_to_use}")
+    print("🎯 Strategy: Same device positions for scenarios testing protocol differences")
+    print("=" * 80)
     
     # Generate positions for all scenarios
     scenarios = generate_scenario_positions(seed_to_use)
     
     # Export based on format choice
     if args.format in ['csv', 'both']:
-        export_positions_to_csv(scenarios, args.output)
+        export_positions_to_csv(scenarios, args.output, seed_to_use)
     
     if args.format in ['txt', 'both']:
         print(f"\n📁 Exporting individual position files to {args.output_dir}/")
@@ -382,6 +479,7 @@ def main():
             visualize_scenario(name, data)
     
     print("\n✅ Position generation complete!")
+    print(f"🔬 Fair comparison enabled: Protocol scenarios use identical device positions")
     print(f"📍 Use these positions in both ns-3 and OMNeT++ for consistent comparison")
     print(f"💡 In ns-3, use: RngSeedManager::SetSeed({seed_to_use})")
 

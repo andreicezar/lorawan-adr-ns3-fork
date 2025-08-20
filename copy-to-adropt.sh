@@ -22,7 +22,7 @@ copy_update() {
     rel="${f#$s/}"
     out="$d/$rel"
     mkdir -p "$(dirname "$out")"
-    # Copy only if missing or content differs (don’t preserve mtime → Git will notice)
+    # Copy only if missing or content differs (don't preserve mtime → Git will notice)
     if [[ ! -e "$out" ]] || ! cmp -s "$f" "$out"; then
       if [[ -x "$f" ]]; then mode=755; else mode=644; fi
       install -D -m "$mode" "$f" "$out"
@@ -31,18 +31,57 @@ copy_update() {
   done
 }
 
+copy_single_file() {
+  local src="$1" dst="$2" desc="$3"
+  if [[ -f "$src" ]]; then
+    mkdir -p "$(dirname "$dst")"
+    if [[ ! -e "$dst" ]] || ! cmp -s "$src" "$dst"; then
+      if [[ -x "$src" ]]; then mode=755; else mode=644; fi
+      install -D -m "$mode" "$src" "$dst"
+      echo "updated: $desc"
+    else
+      echo "unchanged: $desc"
+    fi
+  else
+    echo "warn: $src not found, skipped $desc"
+  fi
+}
+
+echo "🔄 Updating LoRaWAN comparison project files..."
+echo "=" * 50
+
 echo "Updating lorawan …"
 copy_update "$SRC/src/lorawan" "$DST/lorawan"
 
 echo "Updating scratch …"
 copy_update "$SRC/scratch" "$DST/scratch"
 
-echo "Updating fastrun.sh …"
-if [[ -f "$SCRIPT_SRC" ]]; then
-  install -D -m 755 "$SCRIPT_SRC" "$DST/fastrun.sh"
-  echo "updated: fastrun.sh"
+echo "Updating plots folder …"
+if [[ -d "$SRC/plots" ]]; then
+  copy_update "$SRC/plots" "$DST/plots"
 else
-  echo "warn: $SCRIPT_SRC not found, skipped."
+  echo "warn: $SRC/plots not found, skipped plots folder"
 fi
 
+echo "Updating position data and scripts …"
+copy_single_file "$SRC/scenario_positions.csv" "$DST/scenario_positions.csv" "position data (CSV)"
+copy_single_file "$SRC/generate_positions.py" "$DST/generate_positions.py" "position generator script"
+copy_single_file "$SRC/scenario_plotter.py" "$DST/scenario_plotter.py" "plotting script"
+
+echo "Updating fastrun.sh …"
+copy_single_file "$SCRIPT_SRC" "$DST/fastrun.sh" "fastrun.sh"
+
+echo ""
+echo "✅ Copy operation completed!"
+echo "📂 Copied directories:"
+echo "   • lorawan/ (source code)"
+echo "   • scratch/ (scenarios and scripts)"
+echo "   • plots/ (network topology visualizations)"
+echo "📄 Copied files:"
+echo "   • scenario_positions.csv (node positions data)"
+echo "   • generate_positions.py (position generation script)"
+echo "   • scenario_plotter.py (visualization script)"
+echo "   • fastrun.sh (build/run helper)"
+echo ""
+echo "🎯 Backup location: $DST"
 echo "Done."
