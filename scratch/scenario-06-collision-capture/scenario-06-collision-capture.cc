@@ -122,10 +122,12 @@ void OnGatewayReceive(Ptr<const Packet> packet)
 void SetupCaptureTestMobility(NodeContainer& endDevices, NodeContainer& gateways,
                             const std::string& positionFile, bool useFile) {
     // Gateway at center
-        if (useFile) {
+    if (useFile) {
         SetupMobilityFromFile(endDevices, gateways, 1000, "scenario_06_collision", positionFile);
-        std::cout << "✅ Using positions from file: " << positionFile << std::endl; return;
+        std::cout << "✅ Using positions from file: " << positionFile << std::endl; 
+        return;
     }
+    
     // Gateway at center (original behavior)
     Ptr<ListPositionAllocator> positionAllocGw = CreateObject<ListPositionAllocator>();
     positionAllocGw->Add(Vector(0.0, 0.0, 15.0));
@@ -289,13 +291,13 @@ void ExportResults(const std::string& filename, NodeContainer endDevices,
 
 int main(int argc, char* argv[])
 {
-    // Scenario 6 Parameters - Reduced devices for controlled collision testing
-    int nDevices = 20; // Reduced for controlled collision analysis
+    // Scenario 6 Parameters - Equal 120 packets for ALL SFs (including SF12)
+    int nDevices = 50;        // 50 devices for collision testing
     int nGateways = 1;
-    int simulationTime = 10; // minutes
-    int packetInterval = 60; // seconds (frequent for collision testing)
-    double maxRandomLossDb = 3.0; // Reduced randomness for clearer collision analysis
-    uint8_t spreadingFactor = 10; // Command line parameter: test different SFs
+    int simulationTime = 300; // 5 hours to accommodate SF12 duty cycle limits
+    int packetInterval = 150; // 150s intervals - safe for ALL SFs including SF12
+    double maxRandomLossDb = 3.0;
+    uint8_t spreadingFactor = 10;
     std::string outputPrefix = "scenario06_collision_capture";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
@@ -306,7 +308,8 @@ int main(int argc, char* argv[])
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("packetInterval", "Packet interval in seconds", packetInterval);
     cmd.AddValue("nDevices", "Number of devices", nDevices);
-    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
+    cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
+    cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
     // Validate SF range
@@ -345,13 +348,14 @@ int main(int argc, char* argv[])
     Time totalSimulationTime = Seconds(simulationTime * 60);
     Simulator::Stop(totalSimulationTime);
 
-    std::cout << "\n=== Scenario 6: Collision & Capture Effect ===" << std::endl;
+    std::cout << "\n=== Scenario 6: Collision & Capture Effect (Equal 120 Packets for ALL SFs) ===" << std::endl;
     std::cout << "Devices: " << nDevices << " | Gateways: " << nGateways << std::endl;
     std::cout << "Spreading Factor: SF" << (int)spreadingFactor << std::endl;
-    std::cout << "Packet interval: " << packetInterval << "s (frequent for collision testing)" << std::endl;
+    std::cout << "Packet interval: " << packetInterval << "s (duty cycle safe for all SFs)" << std::endl;
     std::cout << "Expected packets per device: " << (simulationTime * 60 / packetInterval) << std::endl;
+    std::cout << "Expected total packets: " << (nDevices * simulationTime * 60 / packetInterval) << std::endl;
+    std::cout << "Simulation time: " << simulationTime << " minutes (5 hours)" << std::endl;
     std::cout << "Strategic placement: Near/far rings for controlled capture effect scenarios" << std::endl;
-    std::cout << "Simulation time: " << simulationTime << " minutes" << std::endl;
     std::cout << "Starting simulation..." << std::endl;
 
     Simulator::Run();
@@ -376,11 +380,11 @@ int main(int argc, char* argv[])
     if (captureStrength > 10.0) {
         std::cout << "✅ Strong capture effect detected!" << std::endl;
     } else if (captureStrength > 5.0) {
-        std::cout << "🔶 Moderate capture effect detected" << std::endl;
+        std::cout << "📶 Moderate capture effect detected" << std::endl;
     } else if (captureStrength > 0.0) {
-        std::cout << "🔸 Weak capture effect detected" << std::endl;
+        std::cout << "📸 Weak capture effect detected" << std::endl;
     } else {
-        std::cout << "❌ No significant capture effect detected" << std::endl;
+        std::cout << "⌐ No significant capture effect detected" << std::endl;
     }
     
     if (g_totalSent > 0) {

@@ -112,42 +112,6 @@ static void OnGatewayReceiveWithContext(std::string context, Ptr<const Packet> p
     }
 }
 
-// ============================================================================
-// SETUP HELPERS
-// ============================================================================
-static void PlaceGateways(NodeContainer& gateways, uint32_t n, double spacing)
-{
-    MobilityHelper mob;
-    Ptr<ListPositionAllocator> alloc = CreateObject<ListPositionAllocator>();
-
-    if (n == 1) {
-        alloc->Add(Vector(0,0,15));
-    } else if (n == 2) {
-        alloc->Add(Vector(-spacing/2, 0, 15));
-        alloc->Add(Vector( spacing/2, 0, 15));
-    } else if (n == 4) {
-        alloc->Add(Vector(-spacing/2, -spacing/2, 15));
-        alloc->Add(Vector( spacing/2, -spacing/2, 15));
-        alloc->Add(Vector(-spacing/2,  spacing/2, 15));
-        alloc->Add(Vector( spacing/2,  spacing/2, 15));
-    }
-
-    mob.SetPositionAllocator(alloc);
-    mob.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-    mob.Install(gateways);
-
-    // build nodeId->idx map and position map
-    for (uint32_t i = 0; i < gateways.GetN(); ++i) {
-        const uint32_t gwNodeId = gateways.Get(i)->GetId();
-        g_gwNodeIdToIdx[gwNodeId] = i;
-
-        Ptr<MobilityModel> m = gateways.Get(i)->GetObject<MobilityModel>();
-        if (m) g_gwPos[gwNodeId] = m->GetPosition();
-
-        g_totalRawPerGw[i] = 0;
-    }
-}
-
 static void BuildMappingScenario8(NodeContainer endDevices)
 {
     // Use standard mapper for DevAddr->nodeId and zeroed counters
@@ -250,6 +214,55 @@ static void ExportScenario8(const std::string& filename,
     std::cout << "✅ Results exported to " << filename << std::endl;
 }
 
+
+// ==============================================================================
+// FIXED SETUP HELPERS
+// ==============================================================================
+static void BuildGatewayMapping(NodeContainer& gateways)
+{
+    // Build nodeId->idx map and position map from already-positioned gateways
+    for (uint32_t i = 0; i < gateways.GetN(); ++i) {
+        const uint32_t gwNodeId = gateways.Get(i)->GetId();
+        g_gwNodeIdToIdx[gwNodeId] = i;
+
+        Ptr<MobilityModel> m = gateways.Get(i)->GetObject<MobilityModel>();
+        if (m) {
+            g_gwPos[gwNodeId] = m->GetPosition();
+            std::cout << "Gateway " << gwNodeId << " (idx=" << i 
+                      << ") at position: " << m->GetPosition() << std::endl;
+        }
+
+        g_totalRawPerGw[i] = 0;
+    }
+    std::cout << "✅ Gateway mapping built for " << gateways.GetN() << " gateways" << std::endl;
+}
+
+
+static void PlaceGateways(NodeContainer& gateways, uint32_t n, double spacing)
+{
+    MobilityHelper mob;
+    Ptr<ListPositionAllocator> alloc = CreateObject<ListPositionAllocator>();
+
+    if (n == 1) {
+        alloc->Add(Vector(0,0,15));
+    } else if (n == 2) {
+        alloc->Add(Vector(-spacing/2, 0, 15));
+        alloc->Add(Vector( spacing/2, 0, 15));
+    } else if (n == 4) {
+        alloc->Add(Vector(-spacing/2, -spacing/2, 15));
+        alloc->Add(Vector( spacing/2, -spacing/2, 15));
+        alloc->Add(Vector(-spacing/2,  spacing/2, 15));
+        alloc->Add(Vector( spacing/2,  spacing/2, 15));
+    }
+
+    mob.SetPositionAllocator(alloc);
+    mob.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+    mob.Install(gateways);
+
+    // CRITICAL FIX: Build the mapping after positioning
+    BuildGatewayMapping(gateways);
+}
+
 // ============================================================================
 // MAIN
 // ============================================================================
@@ -305,10 +318,12 @@ int main(int argc, char* argv[])
     gateways.Create(nGateways);
     endDevices.Create(nDevices);
 
-    // End devices uniformly in a square area
     std::string scenarioName = std::string("scenario_08_multigw_") + std::to_string(nGateways) + "gw";
     if (useFilePositions) {
+        // Load positions from file
         SetupMobilityFromFile(endDevices, gateways, areaSize, scenarioName, positionFile);
+        // CRITICAL FIX: Build gateway mapping even when using file positions
+        BuildGatewayMapping(gateways);
     } else {
         // End devices uniformly in a square area (original behavior)
         MobilityHelper mobEd;
@@ -319,7 +334,20 @@ int main(int argc, char* argv[])
                                          "Min", DoubleValue(-areaSize/2), "Max", DoubleValue(areaSize/2))));
         mobEd.SetMobilityModel("ns3::ConstantPositionMobilityModel");
         mobEd.Install(endDevices);
+        
+        // Place gateways (this now calls BuildGatewayMapping internally)
         PlaceGateways(gateways, nGateways, gatewaySpacing);
+    }
+
+    // Add verification after mobility setup
+    std::cout << "🔍 Verifying gateway setup:" << std::endl;
+    for (uint32_t i = 0; i < gateways.GetN(); ++i) {
+        const uint32_t gwNodeId = gateways.Get(i)->GetId();
+        Ptr<MobilityModel> m = gateways.Get(i)->GetObject<MobilityModel>();
+        if (m) {
+            Vector pos = m->GetPosition();
+            std::cout << "  Gateway " << gwNodeId << " at (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+        }
     }
 
     // --- LoRa stack & server via common helpers ---

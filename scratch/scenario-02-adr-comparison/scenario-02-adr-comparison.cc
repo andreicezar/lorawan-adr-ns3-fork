@@ -94,6 +94,18 @@ void OnGatewayReceive(Ptr<const Packet> packet)
     if (macHeader.GetMType() == LorawanMacHeader::UNCONFIRMED_DATA_UP)
     {
         packetCopy->RemoveHeader(frameHeader);
+        
+        // DEBUG: Check if ADR bit is set (only log first few to avoid spam)
+        static int adrDebugCount = 0;
+        if (adrDebugCount < 10) {
+            if (frameHeader.GetAdr()) {
+                std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit SET ✓" << std::endl;
+            } else {
+                std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit NOT SET ✗" << std::endl;
+            }
+            adrDebugCount++;
+        }
+        
         LoraDeviceAddress deviceAddress = frameHeader.GetAddress();
         
         auto it = g_deviceToNodeMap.find(deviceAddress);
@@ -286,10 +298,60 @@ void ExportScenario2Results(const std::string& filename, NodeContainer endDevice
     std::cout << "✅ Results exported to " << filename << std::endl;
 }
 
+// Update the EnableAdrRequestsOnDevices function to be more thorough
+void EnableAdrRequestsOnDevices(NodeContainer endDevices, bool adrEnabled) {
+    if (!adrEnabled) {
+        std::cout << "⚠️ ADR disabled - devices will not request ADR" << std::endl;
+        return;
+    }
+    
+    std::cout << "🔧 Manually enabling ADR on all devices..." << std::endl;
+    
+    for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+        Ptr<Node> node = endDevices.Get(i);
+        Ptr<LoraNetDevice> loraNetDevice = DynamicCast<LoraNetDevice>(node->GetDevice(0));
+        if (loraNetDevice) {
+            Ptr<EndDeviceLorawanMac> mac = DynamicCast<EndDeviceLorawanMac>(loraNetDevice->GetMac());
+            if (mac) {
+                // Force enable ADR through the attribute system
+                mac->SetAttribute("ADR", BooleanValue(true));
+                
+                // Verify it worked
+                BooleanValue adrValue;
+                mac->GetAttribute("ADR", adrValue);
+                if (adrValue.Get()) {
+                    NS_LOG_DEBUG("Device " << node->GetId() << " ADR enabled successfully");
+                } else {
+                    std::cout << "❌ FAILED to enable ADR on device " << node->GetId() << std::endl;
+                }
+            }
+        }
+    }
+    
+    std::cout << "✅ ADR manually enabled on " << endDevices.GetN() << " devices" << std::endl;
+}
+
+void VerifyAdrSetup(NodeContainer endDevices, bool adrEnabled) {
+    std::cout << "🔍 Verifying ADR setup on devices..." << std::endl;
+    
+    for (uint32_t i = 0; i < std::min(5u, endDevices.GetN()); ++i) {
+        Ptr<Node> node = endDevices.Get(i);
+        Ptr<LoraNetDevice> loraNetDevice = DynamicCast<LoraNetDevice>(node->GetDevice(0));
+        if (loraNetDevice) {
+            Ptr<EndDeviceLorawanMac> mac = DynamicCast<EndDeviceLorawanMac>(loraNetDevice->GetMac());
+            if (mac) {
+                BooleanValue adrValue;
+                mac->GetAttribute("ADR", adrValue);
+                std::cout << "  Device " << node->GetId() << " ADR: " 
+                          << (adrValue.Get() ? "ENABLED" : "DISABLED") << std::endl;
+            }
+        }
+    }
+}
+
 // ==============================================================================
 // MAIN FUNCTION
 // ==============================================================================
-
 int main(int argc, char* argv[])
 {
     // Scenario 2 Parameters - OPTIMIZED for ADR testing (100 packets per device)
@@ -326,9 +388,6 @@ int main(int argc, char* argv[])
     // Logging
     LogComponentEnable("Scenario02AdrComparison", LOG_LEVEL_INFO);
     
-    // EXPLICIT ADR configuration based on parameter
-    SetupAdrConfiguration(adrEnabled);
-    
     // Create nodes
     NodeContainer endDevices, gateways;
     endDevices.Create(nDevices);
@@ -341,7 +400,6 @@ int main(int argc, char* argv[])
     if (useFilePositions) {
         SetupMobilityFromFile(endDevices, gateways, 5000, "scenario_02_adr", positionFile);
      } else {
-        // Use original random placement with fixed seed for reproducibility
         RngSeedManager::SetSeed(12345);
         RngSeedManager::SetRun(1);
         SetupStandardMobility(endDevices, gateways, 5000);
@@ -350,15 +408,18 @@ int main(int argc, char* argv[])
     // Setup LoRa with initial SF12 (DR0) for both cases
     SetupStandardLoRa(endDevices, gateways, channel, 0); // DR0 = SF12
     
+    // CRITICAL: Manually enable ADR on devices AFTER LoRa setup
+    EnableAdrRequestsOnDevices(endDevices, adrEnabled);
+    
     // Setup network server with ADR configuration
     SetupStandardNetworkServer(gateways, endDevices, adrEnabled);
     
+    // Verify ADR setup (debug)
+    VerifyAdrSetup(endDevices, adrEnabled);
+
     // Connect traces
     ConnectStandardTraces(&OnPacketSent, &OnGatewayReceive);
     ConnectAdrTraces(); // ADR-specific traces
-    
-    // DEBUG: Use standard timing instead of staggered
-    std::cout << "DEBUG: Using SetupStandardTiming for debugging..." << std::endl;
     
     // Manual setup for better control and debugging
     Simulator::Schedule(Seconds(1.0), &BuildDeviceMapping, endDevices);
@@ -416,8 +477,8 @@ int main(int argc, char* argv[])
     } else {
         std::cout << "Configuration: Fixed SF12, 14 dBm, NO ADAPTATION" << std::endl;
     }
-    std::cout << "Packet interval: " << packetInterval << "s (staggered start times)" << std::endl;
-    std::cout << "Simulation time: " << simulationTime << " minutes (100 packets per device)" << std::endl;
+    std::cout << "Packet interval: " << packetInterval << "s" << std::endl;
+    std::cout << "Simulation time: " << simulationTime << " minutes" << std::endl;
     std::cout << "Starting simulation..." << std::endl;
 
     Simulator::Run();
