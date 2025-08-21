@@ -286,21 +286,61 @@ void ExportResults(const std::string& filename, NodeContainer endDevices,
 }
 
 // ==============================================================================
+// SF-SPECIFIC TIMING FOR EQUAL PACKETS
+// ==============================================================================
+
+void GetOptimalIntervalForSF(uint8_t spreadingFactor, int& packetInterval, int& simulationTime) {
+    // Calculate intervals that respect duty cycle but achieve ~120 packets
+    switch(spreadingFactor) {
+        case 7:
+            packetInterval = 90;   // SF7: Short ToA, can send frequently
+            simulationTime = 180;  // 3 hours: (180*60)/90 = 120 packets
+            break;
+        case 8:
+            packetInterval = 95;
+            simulationTime = 190;  // (190*60)/95 = 120 packets
+            break;
+        case 9:
+            packetInterval = 100;
+            simulationTime = 200;  // (200*60)/100 = 120 packets
+            break;
+        case 10:
+            packetInterval = 150;  // Original works fine
+            simulationTime = 300;  // (300*60)/150 = 120 packets
+            break;
+        case 11:
+            packetInterval = 200;  // Longer interval needed
+            simulationTime = 400;  // (400*60)/200 = 120 packets
+            break;
+        case 12:
+            packetInterval = 260;  // Much longer interval for SF12
+            simulationTime = 520;  // (520*60)/260 = 120 packets
+            break;
+        default:
+            packetInterval = 150;
+            simulationTime = 300;
+    }
+}
+
+// ==============================================================================
 // MAIN FUNCTION
 // ==============================================================================
 
 int main(int argc, char* argv[])
 {
-    // Scenario 6 Parameters - Equal 120 packets for ALL SFs (including SF12)
-    int nDevices = 50;        // 50 devices for collision testing
+    // NEW CODE - SF-aware parameters:
+    int nDevices = 50;        
     int nGateways = 1;
-    int simulationTime = 300; // 5 hours to accommodate SF12 duty cycle limits
-    int packetInterval = 150; // 150s intervals - safe for ALL SFs including SF12
+    int simulationTime = 300; // Will be overridden by SF-specific values
+    int packetInterval = 150; // Will be overridden by SF-specific values
     double maxRandomLossDb = 3.0;
     uint8_t spreadingFactor = 10;
+    
     std::string outputPrefix = "scenario06_collision_capture";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
+    // Get SF-specific timing BEFORE command line parsing
+    GetOptimalIntervalForSF(spreadingFactor, packetInterval, simulationTime);
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("spreadingFactor", "Spreading Factor to test (7-12)", spreadingFactor);
@@ -312,11 +352,20 @@ int main(int argc, char* argv[])
     cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
     cmd.Parse(argc, argv);
 
+    // Recalculate timing if SF was changed via command line
+    GetOptimalIntervalForSF(spreadingFactor, packetInterval, simulationTime);
+
     // Validate SF range
     if (spreadingFactor < 7 || spreadingFactor > 12) {
         std::cerr << "Error: Spreading Factor must be between 7 and 12" << std::endl;
         return 1;
     }
+
+    // Display optimized settings
+    std::cout << "📊 SF" << (int)spreadingFactor << " optimized settings:" << std::endl;
+    std::cout << "   Packet interval: " << packetInterval << "s" << std::endl;
+    std::cout << "   Simulation time: " << simulationTime << " minutes" << std::endl;
+    std::cout << "   Expected packets per device: " << (simulationTime * 60 / packetInterval) << std::endl;
 
     // Store current SF for analysis
     g_currentSpreadingFactor = spreadingFactor;
@@ -348,13 +397,13 @@ int main(int argc, char* argv[])
     Time totalSimulationTime = Seconds(simulationTime * 60);
     Simulator::Stop(totalSimulationTime);
 
-    std::cout << "\n=== Scenario 6: Collision & Capture Effect (Equal 120 Packets for ALL SFs) ===" << std::endl;
+    std::cout << "\n=== Scenario 6: Collision & Capture Effect (SF-Optimized Equal Packets) ===" << std::endl;
     std::cout << "Devices: " << nDevices << " | Gateways: " << nGateways << std::endl;
     std::cout << "Spreading Factor: SF" << (int)spreadingFactor << std::endl;
-    std::cout << "Packet interval: " << packetInterval << "s (duty cycle safe for all SFs)" << std::endl;
+    std::cout << "Packet interval: " << packetInterval << "s (optimized for SF" << (int)spreadingFactor << ")" << std::endl;
     std::cout << "Expected packets per device: " << (simulationTime * 60 / packetInterval) << std::endl;
     std::cout << "Expected total packets: " << (nDevices * simulationTime * 60 / packetInterval) << std::endl;
-    std::cout << "Simulation time: " << simulationTime << " minutes (5 hours)" << std::endl;
+    std::cout << "Simulation time: " << simulationTime << " minutes" << std::endl;
     std::cout << "Strategic placement: Near/far rings for controlled capture effect scenarios" << std::endl;
     std::cout << "Starting simulation..." << std::endl;
 
