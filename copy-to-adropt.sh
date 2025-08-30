@@ -67,6 +67,8 @@ echo "Updating position data and scripts …"
 copy_single_file "$SRC/scenario_positions.csv" "$DST/scenario_positions.csv" "position data (CSV)"
 copy_single_file "$SRC/generate_positions.py" "$DST/generate_positions.py" "position generator script"
 copy_single_file "$SRC/scenario_plotter.py" "$DST/scenario_plotter.py" "plotting script"
+copy_single_file "$SRC/gen_omnet_scenarios.py" "$DST/gen_omnet_scenarios.py" "generate omnet scenarios script"
+copy_single_file "$SRC/csv-to-omnet.py" "$DST/csv-to-omnet.py" "csv to omnet script"
 
 echo "Updating fastrun.sh …"
 copy_single_file "$SCRIPT_SRC" "$DST/fastrun.sh" "fastrun.sh"
