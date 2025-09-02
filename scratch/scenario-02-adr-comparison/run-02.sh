@@ -4,7 +4,7 @@ set -euo pipefail
 
 echo "🔬 Scenario 2: ADR Comparison"
 echo "=============================="
-echo "📊 Config: 100 devices, 1 gateway, 200min, 120s intervals (100 packets/device)"
+echo "📊 Config: 100 devices, 1 gateway, 500min, 300s intervals"
 
 cd "$(dirname "$0")/../.."
 
@@ -12,60 +12,71 @@ cd "$(dirname "$0")/../.."
 SIM_TIME=500
 PKT_INTERVAL=300
 
-FAILED_CASES=()
+# Function to run a single configuration
+run_config() {
+    local name="$1"
+    local init_sf="$2"
+    local init_tp="$3"
+    local enable_adr="$4"
+    local target_sf="${5:-12}"  # Default SF12 if not provided
+    local target_tp="${6:-14}"  # Default 14dBm if not provided
+    
+    local output_folder="output/scenario-02-adr-comparison/${name}"
+    mkdir -p "$output_folder"
+    
+    echo ""
+    echo "🚀 Running simulation: ${name}"
+    echo "📁 Output directory: $output_folder"
+    echo "⚙️  Config: initSF=$init_sf, initTP=$init_tp, ADR=$enable_adr"
+    if [ "$enable_adr" = "true" ]; then
+        echo "🎯 Target: SF$target_sf, ${target_tp}dBm"
+    else
+        echo "🔒 Fixed: SF$target_sf, ${target_tp}dBm (no adaptation)"
+    fi
+    
+    if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
+        --simulationTime=${SIM_TIME} \
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
+        --packetInterval=${PKT_INTERVAL} \
+        --outputPrefix=$output_folder/result \
+        --adrEnabled=$enable_adr"; then
+        echo "✅ $name completed successfully"
+        return 0
+    else
+        echo "❌ $name FAILED!"
+        return 1
+    fi
+}
 
-# Case 1: ADR DISABLED (fixed SF12)
-output_folder_fixed="output/scenario-02-adr-comparison/fixed"
-mkdir -p "$output_folder_fixed"
+# Main function that runs all scenarios
+run_all_scenarios() {
+    local FAILED_CASES=()
 
-echo ""
-echo "🚀 Running simulation: ADR DISABLED (Fixed SF12)"
-echo "📁 Output directory: $output_folder_fixed"
+    # Scenario 2: Core ADR comparison (SF12, 14dBm initial for both)
+    # Format: run_config "name" "initSF" "initTP" "enableADR" [targetSF] [targetTP]
+    
+    # Case 1: ADR DISABLED - fixed SF12, 14dBm (no adaptation)
+    run_config "fixed-sf12" "true" "true" "false" 12 14
+    [ $? -eq 0 ] || FAILED_CASES+=("fixed-sf12")
+    
+    # Case 2: ADR ENABLED - starts SF12, 14dBm but adapts during simulation
+    run_config "adr-enabled" "true" "true" "true" 12 14
+    [ $? -eq 0 ] || FAILED_CASES+=("adr-enabled")
+    
+    # Final summary
+    echo ""
+    if [ ${#FAILED_CASES[@]} -eq 0 ]; then
+        echo "✅ All ADR comparison scenarios completed successfully!"
+        echo "📈 Results available in output/scenario-02-adr-comparison/"
+    else
+        echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
+        echo "❌ Check the simulation output above for error details"
+        exit 1
+    fi
+}
 
-if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=${SIM_TIME} \    
-    --positionFile=scenario_positions.csv \
-    --useFilePositions=true \
-    --packetInterval=${PKT_INTERVAL} \
-    --outputPrefix=$output_folder_fixed/result \
-    --adrEnabled=false"; then
-    echo "✅ Fixed SF12 case completed successfully"
-else
-    echo "❌ Fixed SF12 case FAILED!"
-    FAILED_CASES+=("Fixed SF12")
-fi
-
-# Case 2: ADR ENABLED (dynamic SF/TP)
-output_folder_adr="output/scenario-02-adr-comparison/adr"
-mkdir -p "$output_folder_adr"
-
-echo ""
-echo "🚀 Running simulation: ADR ENABLED"
-echo "📁 Output directory: $output_folder_adr"
-
-if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
-    --simulationTime=${SIM_TIME} \    
-    --positionFile=scenario_positions.csv \
-    --useFilePositions=true \
-    --packetInterval=${PKT_INTERVAL} \
-    --outputPrefix=$output_folder_adr/result \
-    --adrEnabled=true \
-    --adrType=ns3::AdrComponent"; then
-    echo "✅ ADR enabled case completed successfully"
-else
-    echo "❌ ADR enabled case FAILED!"
-    FAILED_CASES+=("ADR enabled")
-fi
-
-# Final summary
-echo ""
-if [ ${#FAILED_CASES[@]} -eq 0 ]; then
-    echo "✅ All ADR scenarios completed successfully!"
-    echo "📈 Results available in:"
-    echo "   - $output_folder_fixed/ (NO ADR, Fixed SF12)"
-    echo "   - $output_folder_adr/ (ADR ENABLED, Adaptive)"
-else
-    echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
-    echo "❌ Check the simulation output above for error details"
-    exit 1
+# Execute if run directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    run_all_scenarios
 fi

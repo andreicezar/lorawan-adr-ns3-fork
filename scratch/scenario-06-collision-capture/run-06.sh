@@ -1,5 +1,5 @@
 #!/bin/bash
-# run-06-realistic-equal.sh - SF-specific intervals for true 120 packet equality
+# run-06.sh - Scenario 6: Realistic Equal 120 Packets (Duty Cycle Aware)
 set -euo pipefail
 
 echo "🔬 Scenario 6: Realistic Equal 120 Packets (Duty Cycle Aware)"
@@ -7,8 +7,6 @@ echo "============================================================="
 echo "📊 SF-specific intervals to achieve exactly 120 packets per device"
 
 cd "$(dirname "$0")/../.."
-
-FAILED_SFS=()
 
 # SF-specific configurations for exactly 120 packets (duty cycle aware)
 declare -A SF_INTERVALS=(
@@ -29,28 +27,25 @@ declare -A SF_SIMTIMES=(
     [12]=520  # 8.7 hours
 )
 
-echo "⚡ Optimized timing per SF (respects duty cycle limits):"
-for SF in 7 8 9 10 11 12; do
-    interval=${SF_INTERVALS[$SF]}
-    simtime=${SF_SIMTIMES[$SF]}
-    packets=$((simtime * 60 / interval))
-    echo "  SF$SF: ${simtime}min simulation, ${interval}s intervals → $packets packets"
-done
-
-echo ""
-echo "🚀 Running optimized simulations..."
-
-# Test all spreading factors with duty-cycle-aware settings
-for SF in 7 10 12; do  # Key SFs for comparison
-    interval=${SF_INTERVALS[$SF]}
-    simtime=${SF_SIMTIMES[$SF]}
-    expected_packets=$((simtime * 60 / interval))
+# Function to run a single configuration
+run_config() {
+    local name="$1"
+    local init_sf="$2"
+    local init_tp="$3"
+    local enable_adr="$4"
+    local target_sf="${5:-10}"
+    local target_tp="${6:-14}"
     
-    output_folder="output/scenario-06-collision-capture/sf-$SF-realistic-120"
+    # Get SF-specific timing parameters
+    local interval=${SF_INTERVALS[$target_sf]}
+    local simtime=${SF_SIMTIMES[$target_sf]}
+    local expected_packets=$((simtime * 60 / interval))
+    
+    local output_folder="output/scenario-06-collision-capture/sf-${target_sf}-realistic-120"
     mkdir -p "$output_folder"
     
     echo ""
-    echo "🚀 Running SF$SF simulation (duty cycle optimized)"
+    echo "🚀 Running SF${target_sf} simulation (duty cycle optimized)"
     echo "📁 Output: $output_folder"
     echo "⏱️ Time: ${simtime} minutes, Interval: ${interval}s"
     echo "📊 Expected: $expected_packets packets per device"
@@ -60,13 +55,14 @@ for SF in 7 10 12; do  # Key SFs for comparison
         --packetInterval=$interval \
         --positionFile=scenario_positions.csv \
         --useFilePositions=true \
-        --spreadingFactor=$SF \
+        --spreadingFactor=$target_sf \
         --outputPrefix=$output_folder/result \
         --nDevices=50"; then
-        echo "✅ SF$SF completed successfully"
+        
+        echo "✅ SF${target_sf} completed successfully"
         
         # Quick validation
-        result_file="$output_folder/result_sf${SF}_results.csv"
+        result_file="$output_folder/result_sf${target_sf}_results.csv"
         if [ -f "$result_file" ]; then
             total_sent=$(grep "TotalSent," "$result_file" | cut -d',' -f2)
             avg_per_device=$((total_sent / 50))
@@ -78,27 +74,63 @@ for SF in 7 10 12; do  # Key SFs for comparison
                 echo "⚠️ Target missed: Expected ~120, got $avg_per_device"
             fi
         fi
+        return 0
     else
-        echo "❌ SF$SF FAILED!"
-        FAILED_SFS+=("SF$SF")
+        echo "❌ SF${target_sf} FAILED!"
+        return 1
     fi
-done
+}
 
-# Final summary
-echo ""
-echo "=================================================="
-if [ ${#FAILED_SFS[@]} -eq 0 ]; then
-    echo "✅ All realistic equal-packet scenarios completed!"
-    echo "📈 Results available in output/scenario-06-collision-capture/ directories"
+# Main function that runs all scenarios
+run_all_scenarios() {
+    local FAILED_CASES=()
+
+    echo "⚡ Optimized timing per SF (respects duty cycle limits):"
+    for SF in 7 10 12; do
+        interval=${SF_INTERVALS[$SF]}
+        simtime=${SF_SIMTIMES[$SF]}
+        packets=$((simtime * 60 / interval))
+        echo "  SF$SF: ${simtime}min simulation, ${interval}s intervals → $packets packets"
+    done
+
     echo ""
-    echo "🎯 Each SF should now achieve ~120 packets per device"
-    echo "📊 Fair comparison achieved while respecting duty cycle limits"
+    echo "🚀 Running optimized simulations..."
+
+    # Scenario 6: Collision Capture with Duty Cycle Awareness
+    # Format: run_config "name" "initSF" "initTP" "enableADR" [targetSF] [targetTP]
+    
+    # Test key spreading factors with duty-cycle-aware settings
+    run_config "sf7-collision" "true" "true" "false" 7 14
+    [ $? -eq 0 ] || FAILED_CASES+=("sf7-collision")
+    
+    run_config "sf10-collision" "true" "true" "false" 10 14
+    [ $? -eq 0 ] || FAILED_CASES+=("sf10-collision")
+    
+    run_config "sf12-collision" "true" "true" "false" 12 14
+    [ $? -eq 0 ] || FAILED_CASES+=("sf12-collision")
+    
+    # Final summary
     echo ""
-    echo "🔍 Next steps:"
-    echo "   1. Compare capture effect strength across SFs"
-    echo "   2. Analyze collision patterns with equal packet counts"
-    echo "   3. Validate duty cycle compliance in real deployments"
-else
-    echo "❌ Some scenarios failed: ${FAILED_SFS[*]}"
-    exit 1
+    echo "=================================================="
+    if [ ${#FAILED_CASES[@]} -eq 0 ]; then
+        echo "✅ All realistic equal-packet scenarios completed!"
+        echo "📈 Results available in output/scenario-06-collision-capture/ directories"
+        echo ""
+        echo "🎯 Each SF should now achieve ~120 packets per device"
+        echo "📊 Fair comparison achieved while respecting duty cycle limits"
+        echo ""
+        echo "🔍 Next steps:"
+        echo "   1. Compare capture effect strength across SFs"
+        echo "   2. Analyze collision patterns with equal packet counts"
+        echo "   3. Validate duty cycle compliance in real deployments"
+    else
+        echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
+        echo "❌ Check the simulation output above for error details"
+        exit 1
+    fi
+}
+
+# Execute if run directly (preserve original functionality)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    run_all_scenarios
 fi

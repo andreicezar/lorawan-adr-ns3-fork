@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# --- Configuration ---
 # Source and destination (WSL paths)
 SRC="/home/andrei/development/ns3-comparison-clean/ns-3-dev"
 DST="/home/andrei/development/ns3-adropt-development/ns3-lorawan-adropt-project"
 SCRIPT_SRC="/home/andrei/development/fastrun.sh"
 
+# --- State Tracking for Dynamic Summary ---
+# Arrays to hold the descriptions of successfully processed items
+declare -a copied_dirs
+declare -a copied_files
+
+# --- Helper function to copy/update a directory ---
 copy_update() {
   local s="$1" d="$2"
   mkdir -p "$d"
@@ -22,7 +29,7 @@ copy_update() {
     rel="${f#$s/}"
     out="$d/$rel"
     mkdir -p "$(dirname "$out")"
-    # Copy only if missing or content differs (don't preserve mtime → Git will notice)
+    # Copy only if missing or content differs
     if [[ ! -e "$out" ]] || ! cmp -s "$f" "$out"; then
       if [[ -x "$f" ]]; then mode=755; else mode=644; fi
       install -D -m "$mode" "$f" "$out"
@@ -31,6 +38,7 @@ copy_update() {
   done
 }
 
+# --- Helper function to copy a single file ---
 copy_single_file() {
   local src="$1" dst="$2" desc="$3"
   if [[ -f "$src" ]]; then
@@ -42,48 +50,107 @@ copy_single_file() {
     else
       echo "unchanged: $desc"
     fi
+    return 0 # Success
   else
     echo "warn: $src not found, skipped $desc"
+    return 1 # Failure
   fi
 }
 
+# --- Main Execution ---
 echo "🔄 Updating LoRaWAN comparison project files..."
-echo "=" * 50
+echo "=================================================="
 
-echo "Updating lorawan …"
-copy_update "$SRC/src/lorawan" "$DST/lorawan"
-
-echo "Updating scratch …"
-copy_update "$SRC/scratch" "$DST/scratch"
-
-echo "Updating plots folder …"
+# --- Directories ---
+echo "Updating core directories …"
+if [[ -d "$SRC/src/lorawan" ]]; then
+  copy_update "$SRC/src/lorawan" "$DST/lorawan"
+  copied_dirs+=("lorawan/ (source code)")
+fi
+if [[ -d "$SRC/scratch" ]]; then
+  copy_update "$SRC/scratch" "$DST/scratch"
+  copied_dirs+=("scratch/ (scenarios and scripts)")
+fi
 if [[ -d "$SRC/plots" ]]; then
   copy_update "$SRC/plots" "$DST/plots"
-else
-  echo "warn: $SRC/plots not found, skipped plots folder"
+  copied_dirs+=("plots/ (network topology visualizations)")
+fi
+if [[ -d "$SRC/generated-omnet-scenarios" ]]; then
+  copy_update "$SRC/generated-omnet-scenarios" "$DST/generated-omnet-scenarios"
+  copied_dirs+=("generated-omnet-scenarios/")
+fi
+if [[ -d "$SRC/omnet_positions" ]]; then
+  copy_update "$SRC/omnet_positions" "$DST/omnet_positions"
+  copied_dirs+=("omnet_positions/")
 fi
 
-echo "Updating position data and scripts …"
-copy_single_file "$SRC/scenario_positions.csv" "$DST/scenario_positions.csv" "position data (CSV)"
-copy_single_file "$SRC/generate_positions.py" "$DST/generate_positions.py" "position generator script"
-copy_single_file "$SRC/scenario_plotter.py" "$DST/scenario_plotter.py" "plotting script"
-copy_single_file "$SRC/gen_omnet_scenarios.py" "$DST/gen_omnet_scenarios.py" "generate omnet scenarios script"
-copy_single_file "$SRC/csv-to-omnet.py" "$DST/csv-to-omnet.py" "csv to omnet script"
+# --- NEW: Find individual baseline files and copy them to a 'baselines' directory ---
+echo "Updating OMNeT++ baseline files …"
+baselines_found=0
+# Use a glob to find all matching baseline files in the source directory
+for f in "$SRC"/omnetpp-scenario-*-baseline; do
+    # Check if the glob found any actual files
+    if [[ -f "$f" ]]; then
+        baselines_found=1
+        filename=$(basename "$f")
+        # Copy the file into the 'baselines' directory at the destination
+        copy_single_file "$f" "$DST/baselines/$filename" "$filename"
+    fi
+done
+# If we found and copied any baseline files, add the new directory to the summary
+if ((baselines_found)); then
+    copied_dirs+=("baselines/ (OMNeT++ baseline files)")
+else
+    echo "info: No OMNeT++ baseline files found to copy."
+fi
 
-echo "Updating fastrun.sh …"
-copy_single_file "$SCRIPT_SRC" "$DST/fastrun.sh" "fastrun.sh"
 
+# --- Python Scripts ---
+echo "Updating Python scripts …"
+PY_SCRIPTS=(
+    "ns3_lorawan_parser.py" "run_diagnostics.py" "run_analysis.py"
+    "analyze_comparison.py" "generate_omnet_baselines.py"
+    "generate_positions.py" "scenario_plotter.py" "gen_omnet_scenarios.py"
+    "csv-to-omnet.py"
+)
+py_scripts_found=0
+for script in "${PY_SCRIPTS[@]}"; do
+    # copy_single_file returns 0 on success
+    if copy_single_file "$SRC/$script" "$DST/$script" "$script"; then
+        py_scripts_found=1
+    fi
+done
+if ((py_scripts_found)); then
+    copied_files+=("Core Python scripts (analysis, plotting, etc.)")
+fi
+
+# --- Individual Data and Helper Files ---
+echo "Updating individual files …"
+if copy_single_file "$SRC/scenario_positions.csv" "$DST/scenario_positions.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions.csv (node positions data)")
+fi
+if copy_single_file "$SCRIPT_SRC" "$DST/fastrun.sh" "fastrun.sh"; then
+    copied_files+=("fastrun.sh (build/run helper)")
+fi
+
+# --- Dynamic Final Summary ---
 echo ""
 echo "✅ Copy operation completed!"
-echo "📂 Copied directories:"
-echo "   • lorawan/ (source code)"
-echo "   • scratch/ (scenarios and scripts)"
-echo "   • plots/ (network topology visualizations)"
-echo "📄 Copied files:"
-echo "   • scenario_positions.csv (node positions data)"
-echo "   • generate_positions.py (position generation script)"
-echo "   • scenario_plotter.py (visualization script)"
-echo "   • fastrun.sh (build/run helper)"
+
+if [ ${#copied_dirs[@]} -gt 0 ]; then
+    echo "📂 Copied directories:"
+    for item in "${copied_dirs[@]}"; do
+        echo "   • $item"
+    done
+fi
+
+if [ ${#copied_files[@]} -gt 0 ]; then
+    echo "📄 Copied files:"
+    for item in "${copied_files[@]}"; do
+        echo "   • $item"
+    done
+fi
+
 echo ""
 echo "🎯 Backup location: $DST"
 echo "Done."

@@ -4,61 +4,76 @@ set -euo pipefail
 
 echo "🔬 Scenario 4: Confirmed vs Unconfirmed Messages"
 echo "==============================================="
-echo "📊 Config: 100 devices, 1 gateway, 20min, 120s intervals"
+echo "📊 Config: 100 devices, 1 gateway, 80min, 120s intervals"
 
 cd "$(dirname "$0")/../.."
 
-FAILED_CASES=()
+# Function to run a single configuration
+run_config() {
+    local name="$1"
+    local init_sf="$2"
+    local init_tp="$3"
+    local enable_adr="$4"
+    local target_sf="${5:-10}"
+    local target_tp="${6:-14}"
+    
+    # Map scenario name to confirmed messages setting
+    local confirmed_messages="false"
+    if [[ "$name" == "confirmed" ]]; then
+        confirmed_messages="true"
+    fi
+    
+    local output_folder="output/scenario-04-confirmed-messages/${name}"
+    mkdir -p "$output_folder"
+    
+    echo ""
+    echo "🚀 Running simulation: ${name} messages"
+    echo "📁 Output directory: $output_folder"
+    echo "⚙️  Config: SF${target_sf}, ${target_tp}dBm, Confirmed=${confirmed_messages}"
+    
+    if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
+        --simulationTime=80 \
+        --positionFile=scenario_positions.csv \
+        --useFilePositions=true \
+        --confirmedMessages=$confirmed_messages \
+        --outputPrefix=$output_folder/result"; then
+        echo "✅ $name messages completed successfully"
+        return 0
+    else
+        echo "❌ $name messages FAILED!"
+        return 1
+    fi
+}
 
-# Case 1: UNCONFIRMED MESSAGES
-output_folder_unconf="output/scenario-04-confirmed-messages/unconfirmed"
-mkdir -p "$output_folder_unconf"
+# Main function that runs all scenarios
+run_all_scenarios() {
+    local FAILED_CASES=()
 
-echo ""
-echo "🚀 Running simulation: UNCONFIRMED messages"
-echo "📁 Output directory: $output_folder_unconf"
+    # Scenario 4: Confirmed vs Unconfirmed Message Comparison
+    # Format: run_config "name" "initSF" "initTP" "enableADR" [targetSF] [targetTP]
+    
+    # Test unconfirmed vs confirmed messages (SF10, 14dBm, no ADR)
+    run_config "unconfirmed" "true" "true" "false" 10 14
+    [ $? -eq 0 ] || FAILED_CASES+=("unconfirmed")
+    
+    run_config "confirmed" "true" "true" "false" 10 14
+    [ $? -eq 0 ] || FAILED_CASES+=("confirmed")
+    
+    # Final summary
+    echo ""
+    if [ ${#FAILED_CASES[@]} -eq 0 ]; then
+        echo "✅ All confirmed vs unconfirmed scenarios completed successfully!"
+        echo "📈 Results available in:"
+        echo "   - output/scenario-04-confirmed-messages/unconfirmed/ (UNCONFIRMED messages)"
+        echo "   - output/scenario-04-confirmed-messages/confirmed/ (CONFIRMED messages)"
+    else
+        echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
+        echo "❌ Check the simulation output above for error details"
+        exit 1
+    fi
+}
 
-if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
-    --simulationTime=80 \    
-    --positionFile=scenario_positions.csv \
-    --useFilePositions=true \
-    --confirmedMessages=false \
-    --outputPrefix=$output_folder_unconf/result"; then
-    echo "✅ Unconfirmed case completed successfully"
-else
-    echo "❌ Unconfirmed case FAILED!"
-    FAILED_CASES+=("Unconfirmed")
-fi
-
-# Case 2: CONFIRMED MESSAGES
-output_folder_conf="output/scenario-04-confirmed-messages/confirmed"
-mkdir -p "$output_folder_conf"
-
-echo ""
-echo "🚀 Running simulation: CONFIRMED messages"
-echo "📁 Output directory: $output_folder_conf"
-
-if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
-    --simulationTime=80 \    
-    --positionFile=scenario_positions.csv \
-    --useFilePositions=true \
-    --confirmedMessages=true \
-    --outputPrefix=$output_folder_conf/result"; then
-    echo "✅ Confirmed case completed successfully"
-else
-    echo "❌ Confirmed case FAILED!"
-    FAILED_CASES+=("Confirmed")
-fi
-
-# Final summary
-echo ""
-if [ ${#FAILED_CASES[@]} -eq 0 ]; then
-    echo "✅ All confirmed vs unconfirmed scenarios completed successfully!"
-    echo "📈 Results available in:"
-    echo "   - $output_folder_unconf/ (UNCONFIRMED messages)"
-    echo "   - $output_folder_conf/ (CONFIRMED messages)"
-else
-    echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
-    echo "❌ Check the simulation output above for error details"
-    exit 1
+# Execute if run directly (preserve original functionality)
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    run_all_scenarios
 fi

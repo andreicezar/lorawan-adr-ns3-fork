@@ -278,6 +278,9 @@ int main(int argc, char* argv[])
     std::string outputPrefix = "scenario08_multi_gateway";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
+    int initSf = -1;        // when 7..12 → force SF, else ignore
+    int initTp = -1000;     // when 2..14 → force TP dBm, else ignore
+    bool enableADR = false; // off by default
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("nGateways", "Number of gateways (1, 2, 4)", nGateways);
@@ -287,6 +290,9 @@ int main(int argc, char* argv[])
     cmd.AddValue("nDevices", "Number of devices", nDevices);
     cmd.AddValue("positionFile", "CSV file with node positions", positionFile);
     cmd.AddValue("useFilePositions", "Use positions from file (vs random)", useFilePositions);
+    cmd.AddValue("initSf", "Initial spreading factor (7..12, EU868). Omit to keep default.", initSf);
+    cmd.AddValue("initTp", "Initial TX power in dBm (2..14). Omit to keep default.", initTp);
+    cmd.AddValue("enableADR", "Enable ADR on end devices and server", enableADR);
     cmd.Parse(argc, argv);
 
     if (nGateways != 1 && nGateways != 2 && nGateways != 4) {
@@ -296,7 +302,7 @@ int main(int argc, char* argv[])
     g_nGateways = nGateways;
 
     LogComponentEnable("Scenario08MultiGateway", LOG_LEVEL_INFO);
-    Config::SetDefault("ns3::EndDeviceLorawanMac::ADR", BooleanValue(false)); // stable testing
+    Config::SetDefault("ns3::EndDeviceLorawanMac::ADR", BooleanValue(enableADR)); 
 
     // --- Channel (LogDistance + small random loss), same as original draft ---
     Ptr<LogDistancePropagationLossModel> log = CreateObject<LogDistancePropagationLossModel>();
@@ -351,10 +357,25 @@ int main(int argc, char* argv[])
     }
 
     // --- LoRa stack & server via common helpers ---
-    const uint8_t dataRate = 2; // DR2 (SF10 EU868)
-    SetupStandardLoRa(endDevices, gateways, channel, dataRate);
-    SetupStandardNetworkServer(gateways, endDevices, /*enableAdr=*/false);
+    // Map SF→DR if requested, otherwise pass -1 (same contract as Scenario 1).
+    int dr = -1;
+    if (initSf >= 7 && initSf <= 12) {
+        dr = 12 - initSf; // EU868: DR = 12 - SF (same mapping S1 uses)
+    }
+    SetupStandardLoRa(endDevices, gateways, channel, dr);
+    SetupStandardNetworkServer(gateways, endDevices, /*enableAdr=*/enableADR);
 
+    // Apply per-device TX power at the MAC level if requested (like Scenario 1)
+    if (initTp >= 2 && initTp <= 14) {
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            Ptr<LoraNetDevice> nd = endDevices.Get(i)->GetDevice(0)->GetObject<LoraNetDevice>();
+            if (!nd) continue;
+            Ptr<EndDeviceLorawanMac> mac = nd->GetMac()->GetObject<EndDeviceLorawanMac>();
+            if (!mac) continue;
+            mac->SetTransmissionPowerDbm(static_cast<double>(initTp));
+        }
+        std::cout << "⚡ Applied per-device TX power: " << initTp << " dBm" << std::endl;
+    }
     // --- Timing & mapping ---
     SetupStandardTiming(endDevices, simulationTime, g_packetInterval, &BuildMappingScenario8);
 

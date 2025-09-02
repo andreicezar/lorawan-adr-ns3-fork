@@ -1,77 +1,96 @@
 #!/bin/bash
-# ==============================================================================
 # run-08.sh - Scenario 8: Multi-Gateway Coordination
-# Runs the ns-3 simulation with different gateway counts and saves results.
-# Follows the same structure and final summary pattern as run-06.sh.
-# ==============================================================================
-
 set -euo pipefail
 
 echo "🔬 Scenario 8: Multi-Gateway Coordination"
 echo "========================================="
-echo "📊 Config base: 200 devices, DR2(SF10), interval 300s, sim 20 min"
+echo "📊 Baseline: 200 devices, DR2(SF10), interval 300s, sim 200min"
 
-# Move to repo root (same style as run-06.sh)
 cd "$(dirname "$0")/../.."
 
-# Optional build step (keep same check/flow as your other scripts)
-if [ -d "cmake-cache" ]; then
-  /usr/bin/cmake --build "$(pwd)/cmake-cache" -j"$(nproc)"
-else
-  echo "ℹ️  Skipping build: cmake-cache not found (make sure you've configured CMake)."
-fi
-
-# ------------------------------------------------------------------------------
-# Scenario variables (tweak as needed)
-# ------------------------------------------------------------------------------
 SCENARIO_PATH="scratch/scenario-08-multi-gateway/scenario-08-multi-gateway"
 OUTPUT_BASE="output/scenario-08-multi-gateway"
+SIM_MIN=200
+NDEV=200
+GW_SPACING=2000
+POSITION_FILE="scenario_positions.csv"
 
-SIMULATION_TIME=200        # minutes
-N_DEVICES=200
-INTERVAL=300              # seconds (fixed in scenario; here just informative)
-GATEWAY_SPACING=2000      # meters between gateways (for 2/4 GW layouts)
+# run_config <name> <init_sf:true|false> <init_tp:true|false> <enable_adr:true|false> [targetSF targetTP]
+run_config() {
+  local name="$1"
+  local init_sf="$2"
+  local init_tp="$3"
+  local enable_adr="$4"
+  local target_sf="${5:-10}"
+  local target_tp="${6:-14}"
 
-GATEWAY_COUNTS=(1 2 4)
+  local NGW=1
+  if [[ "$name" =~ ^([0-9]+)gw$ ]]; then
+    NGW="${BASH_REMATCH[1]}"
+  fi
 
-# ------------------------------------------------------------------------------
-# Run matrix
-# ------------------------------------------------------------------------------
-mkdir -p "${OUTPUT_BASE}"
-FAILED_RUNS=()
-
-for NGW in "${GATEWAY_COUNTS[@]}"; do
-  CASE_DIR="${OUTPUT_BASE}/${NGW}gw"
-  mkdir -p "${CASE_DIR}"
+  local out_dir="${OUTPUT_BASE}/${name}"
+  mkdir -p "$out_dir"
 
   echo ""
-  echo "🚀 Running: ${NGW} gateway(s)"
-  echo "📁 Output directory: ${CASE_DIR}"
+  echo "🚀 Running: ${name}"
+  echo "   nGW=${NGW}, initSF=${init_sf}(${target_sf}), initTP=${init_tp}(${target_tp} dBm), ADR=${enable_adr}"
+  echo "📁 Output: ${out_dir}"
 
-  if ./ns3 run "${SCENARIO_PATH} \
-      --nGateways=${NGW} \
-      --simulationTime=${SIMULATION_TIME} \    
-      --positionFile=scenario_positions.csv \
-      --useFilePositions=true \
-      --nDevices=${N_DEVICES} \
-      --gatewaySpacing=${GATEWAY_SPACING} \
-      --outputPrefix=${CASE_DIR}/result"; then
-    echo "✅ ${NGW} GW run completed successfully"
-  else
-    echo "❌ ${NGW} GW run FAILED!"
-    FAILED_RUNS+=("${NGW}gw")
+  local cmd="./ns3 run \"${SCENARIO_PATH} \
+    --nGateways=${NGW} \
+    --nDevices=${NDEV} \
+    --gatewaySpacing=${GW_SPACING} \
+    --simulationTime=${SIM_MIN} \
+    --useFilePositions=true \
+    --positionFile=${POSITION_FILE} \
+    --outputPrefix=${out_dir}/result"
+
+  # Pass the new flags only when requested
+  if [[ "$init_sf" == "true" ]]; then
+    cmd="${cmd} --initSf=${target_sf}"
   fi
-done
+  if [[ "$init_tp" == "true" ]]; then
+    cmd="${cmd} --initTp=${target_tp}"
+  fi
+  if [[ "$enable_adr" == "true" ]]; then
+    cmd="${cmd} --enableADR=true"
+  fi
 
-# ------------------------------------------------------------------------------
-# Final summary (same pattern/feel as run-06.sh)
-# ------------------------------------------------------------------------------
-echo ""
-if [ ${#FAILED_RUNS[@]} -eq 0 ]; then
-  echo "✅ All Scenario 8 runs completed successfully!"
-  echo "📈 Results available under: ${OUTPUT_BASE}/"
-else
-  echo "❌ Some Scenario 8 runs failed: ${FAILED_RUNS[*]}"
-  echo "🔎 Check the logs above for details."
-  exit 1
+  cmd="${cmd}\""
+
+  if eval $cmd; then
+    echo "✅ ${name} completed successfully"
+    return 0
+  else
+    echo "❌ ${name} FAILED"
+    return 1
+  fi
+}
+
+run_all_scenarios() {
+  local FAILED_CASES=()
+
+  run_config "1gw" "true" "true" "false" 10 14
+  [ $? -eq 0 ] || FAILED_CASES+=("1gw")
+
+  run_config "2gw" "true" "true" "false" 10 14
+  [ $? -eq 0 ] || FAILED_CASES+=("2gw")
+
+  run_config "4gw" "true" "true" "false" 10 14
+  [ $? -eq 0 ] || FAILED_CASES+=("4gw")
+
+  echo ""
+  if [ ${#FAILED_CASES[@]} -eq 0 ]; then
+    echo "✅ All Scenario 8 runs completed successfully!"
+    echo "📈 Results available under: ${OUTPUT_BASE}/"
+  else
+    echo "❌ Some Scenario 8 runs failed: ${FAILED_CASES[*]}"
+    echo "🔎 Check the logs above for details."
+    exit 1
+  fi
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  run_all_scenarios
 fi
