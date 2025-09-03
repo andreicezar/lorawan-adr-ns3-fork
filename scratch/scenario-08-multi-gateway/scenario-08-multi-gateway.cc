@@ -358,11 +358,19 @@ int main(int argc, char* argv[])
 
     // --- LoRa stack & server via common helpers ---
     // Map SF→DR if requested, otherwise pass -1 (same contract as Scenario 1).
-    int dr = -1;
-    if (initSf >= 7 && initSf <= 12) {
-        dr = 12 - initSf; // EU868: DR = 12 - SF (same mapping S1 uses)
+    // NEW: if initSf ∈ [7..12] → map to DR; else default to DR2 (SF10) like FLoRa
+    bool sfGiven = (initSf >= 7 && initSf <= 12);
+    uint8_t dataRate = sfGiven ? uint8_t(12 - initSf) : 2; // DR2 = SF10 (EU868)
+
+    SetupStandardLoRa(endDevices, gateways, channel, dataRate);
+    if (enableADR) {
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            auto dev = endDevices.Get(i)->GetDevice(0)->GetObject<lorawan::LoraNetDevice>();
+            auto mac = dev->GetMac()->GetObject<lorawan::EndDeviceLorawanMac>();
+            mac->SetAttribute("ADR", ns3::BooleanValue(true));
+        }
     }
-    SetupStandardLoRa(endDevices, gateways, channel, dr);
+    
     SetupStandardNetworkServer(gateways, endDevices, /*enableAdr=*/enableADR);
 
     // Apply per-device TX power at the MAC level if requested (like Scenario 1)

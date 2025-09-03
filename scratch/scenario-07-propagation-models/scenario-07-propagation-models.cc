@@ -287,6 +287,7 @@ int main(int argc, char* argv[])
     // --- LoRa stack & server via common helpers ---
     const uint8_t dataRate = 2; // DR2 = SF10 (EU868)
     SetupStandardLoRa(endDevices, gateways, channel, dataRate);              // :contentReference[oaicite:7]{index=7}
+
     SetupStandardNetworkServer(gateways, endDevices, false);                 // :contentReference[oaicite:8]{index=8}
 
     // --- Timing & traces (standardized) ---

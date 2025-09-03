@@ -263,6 +263,7 @@ int main(int argc, char* argv[])
     // Convert SF to DR for EU868
     uint8_t dataRate = lora::DrFromSfEu868(spreadingFactor);
     SetupStandardLoRa(endDevices, gateways, channel, dataRate);
+
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     
     // Setup timing and traces

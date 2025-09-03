@@ -222,6 +222,8 @@ int main(int argc, char* argv[])
     std::string outputPrefix = "scenario04_confirmed_messages";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
+    bool initSF = false;      // Initialize spreading factor
+    bool initTP = false;      // Initialize transmit power
 
     CommandLine cmd(__FILE__);
     cmd.AddValue("confirmedMessages", "Use confirmed messages (true) or unconfirmed (false)", confirmedMessages);
@@ -253,6 +255,30 @@ int main(int argc, char* argv[])
         SetupStandardMobility(endDevices, gateways, 5000);
     }
     SetupStandardLoRa(endDevices, gateways, channel, 2); // DR2 = SF10
+    ApplyOmnetBootstrapDefaults(endDevices, initSF, initTP);
+    if (confirmedMessages) {
+        // Make uplinks CONFIRMED
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            auto dev = endDevices.Get(i)->GetDevice(0)->GetObject<lorawan::LoraNetDevice>();
+            if (!dev) continue;
+            auto mac = dev->GetMac()->GetObject<lorawan::EndDeviceLorawanMac>();
+            if (!mac) continue;
+            mac->SetMType(LorawanMacHeader::CONFIRMED_DATA_UP);
+            // (Equivalent attribute form, if you prefer):
+            // mac->SetAttribute("MType", EnumValue(LorawanMacHeader::CONFIRMED_DATA_UP));
+        }
+    } else {
+        // Make uplinks explicitly UNCONFIRMED (be explicit for clarity)
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            auto dev = endDevices.Get(i)->GetDevice(0)->GetObject<lorawan::LoraNetDevice>();
+            if (!dev) continue;
+            auto mac = dev->GetMac()->GetObject<lorawan::EndDeviceLorawanMac>();
+            if (!mac) continue;
+            mac->SetMType(LorawanMacHeader::UNCONFIRMED_DATA_UP);
+            // mac->SetAttribute("MType", EnumValue(LorawanMacHeader::UNCONFIRMED_DATA_UP));
+        }
+    }
+
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     
     // Setup timing and traces

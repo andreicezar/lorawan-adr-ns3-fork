@@ -210,7 +210,7 @@ int main(int argc, char* argv[])
     std::string outputPrefix = "scenario05_traffic_patterns";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
-    
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("packetInterval", "Packet interval in seconds (600, 300, 60)", packetInterval);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
@@ -242,6 +242,7 @@ int main(int argc, char* argv[])
         SetupStandardMobility(endDevices, gateways, sideLengthMeters);
     }
     SetupStandardLoRa(endDevices, gateways, channel, 2); // DR2 = SF10
+
     SetupStandardNetworkServer(gateways, endDevices, false); // No ADR
     
     // Setup timing and traces

@@ -15,6 +15,12 @@
 #include "ns3/periodic-sender-helper.h"
 #include "ns3/point-to-point-module.h"
 
+// Direct class headers (needed for GetObject<> below)
+#include "ns3/lora-net-device.h"
+#include "ns3/end-device-lorawan-mac.h"
+#include "ns3/end-device-lora-phy.h"
+#include "ns3/gateway-lorawan-mac.h"
+
 // Standard includes
 #include <fstream>
 #include <iomanip>
@@ -194,7 +200,7 @@ inline void SetupStandardNetworkServer(NodeContainer& gateways, NodeContainer& e
     forwarderHelper.Install(gateways);
 }
 
-// put this helper next to your other timing helpers
+// Option A: evenly stagger start times over one period (for load smoothing)
 inline void SetupTimingStaggered(NodeContainer endDevices, int simulationTime,
                                  int packetInterval, void (*buildMappingFunc)(NodeContainer)) {
     Simulator::Schedule(Seconds(1.0), buildMappingFunc, endDevices);
@@ -214,7 +220,6 @@ inline void SetupTimingStaggered(NodeContainer endDevices, int simulationTime,
     std::cout << "✅ Staggered timing across " << N << " nodes within "
               << packetInterval << "s.\n";
 }
-
 
 // ==============================================================================
 // STANDARD LORA SETUP
@@ -323,6 +328,33 @@ inline void ConnectStandardTraces(void (*onPacketSent)(Ptr<const Packet>),
     Config::ConnectWithoutContext(
         "/NodeList/*/DeviceList/0/$ns3::LoraNetDevice/Mac/$ns3::GatewayLorawanMac/ReceivedPacket",
         MakeCallback(onGatewayReceive));
+}
+
+// ==============================================================================
+// OMNeT-like bootstrap defaults when init flags are OFF
+//   - If initSf == false  → set DR2 (EU868 SF10) and align PHY listening SF
+//   - If initTp == false  → set 14 dBm
+// Call this AFTER installing the LoRa stack and BEFORE installing apps.
+// ==============================================================================
+inline void ApplyOmnetBootstrapDefaults(ns3::NodeContainer endDevices,
+                                        bool initSf, bool initTp)
+{
+    for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+        Ptr<LoraNetDevice> dev =
+            endDevices.Get(i)->GetDevice(0)->GetObject<LoraNetDevice>();
+        if (!dev) continue;
+
+        Ptr<EndDeviceLorawanMac> mac = dev->GetMac()->GetObject<EndDeviceLorawanMac>();
+        Ptr<EndDeviceLoraPhy>    phy = dev->GetPhy()->GetObject<EndDeviceLoraPhy>();
+
+        if (!initSf && mac) {
+            mac->SetDataRate(2);                 // DR2 → SF10 (EU868)
+            if (phy) phy->SetSpreadingFactor(10);
+        }
+        if (!initTp && mac) {
+            mac->SetTransmissionPowerDbm(14.0);  // 14 dBm
+        }
+    }
 }
 
 #endif // SCENARIO_UTILS_H

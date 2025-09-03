@@ -26,6 +26,7 @@
 #include "ns3/lora-device-address-generator.h"
 #include "ns3/lora-helper.h"
 #include "ns3/lora-phy-helper.h"
+#include "ns3/end-device-lorawan-mac.h"
 #include "ns3/lorawan-mac-helper.h"
 #include "ns3/mobility-helper.h"
 #include "ns3/network-module.h"
@@ -66,6 +67,10 @@ bool g_initSF = true;
 bool g_initTP = true;
 bool g_enableADR = false;
 
+std::map<uint32_t, std::vector<std::pair<double, uint8_t>>> g_adrHistory; 
+uint32_t g_totalAdrRequests = 0;
+uint32_t g_totalAdrResponses = 0;
+
 // ==============================================================================
 // CALLBACK FUNCTIONS
 // ==============================================================================
@@ -101,15 +106,51 @@ void OnGatewayReceive(Ptr<const Packet> packet)
     }
 }
 
+// Enhanced callback functions - replace your existing ones
 void OnDataRateChange(uint8_t oldDr, uint8_t newDr) {
     uint32_t nodeId = Simulator::GetContext();
+    double time = Simulator::Now().GetSeconds();
+    
     g_adrChangesPerNode[nodeId]++;
-    NS_LOG_INFO("Node " << nodeId << " DR change: " << (int)oldDr << " -> " << (int)newDr);
+    g_adrHistory[nodeId].push_back(std::make_pair(time, newDr));
+    g_totalAdrResponses++;
+    
+    NS_LOG_INFO("Node " << nodeId << " DR change: " << (int)oldDr << " -> " << (int)newDr 
+                << " (SF" << (12-oldDr) << " -> SF" << (12-newDr) << ") at " << time << "s");
+    
+    std::cout << "ADR: Node " << nodeId << " changed from SF" << (12-oldDr) 
+              << " to SF" << (12-newDr) << " at " << time << "s" << std::endl;
 }
 
 void OnTxPowerChange(double oldTxPower, double newTxPower) {
     uint32_t nodeId = Simulator::GetContext();
-    NS_LOG_INFO("Node " << nodeId << " TX Power change: " << oldTxPower << " -> " << newTxPower << " dBm");
+    double time = Simulator::Now().GetSeconds();
+    
+    NS_LOG_INFO("Node " << nodeId << " TX Power change: " << oldTxPower << " -> " << newTxPower 
+                << " dBm at " << time << "s");
+                
+    std::cout << "ADR: Node " << nodeId << " power changed from " << oldTxPower 
+              << " to " << newTxPower << " dBm at " << time << "s" << std::endl;
+}
+
+// Add debug function to check ADR configuration
+void DebugAdrConfiguration(NodeContainer endDevices) {
+    std::cout << "\n=== ADR Configuration Debug ===" << std::endl;
+    
+    for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+        if (i >= 5) break; // Show first 5 nodes only
+        
+        Ptr<LoraNetDevice> device = endDevices.Get(i)->GetDevice(0)->GetObject<LoraNetDevice>();
+        Ptr<EndDeviceLorawanMac> mac = device->GetMac()->GetObject<EndDeviceLorawanMac>();
+        
+        uint32_t nodeId = endDevices.Get(i)->GetId();
+        uint8_t currentDR = mac->GetDataRate();
+        double currentTP = mac->GetTransmissionPowerDbm();
+        
+        std::cout << "Node " << nodeId << ": DR=" << (int)currentDR 
+                  << " (SF" << (12-currentDR) << "), TP=" << currentTP << "dBm" << std::endl;
+    }
+    std::cout << "===============================\n" << std::endl;
 }
 
 // ==============================================================================
@@ -151,18 +192,18 @@ void BuildDeviceMapping(NodeContainer endDevices) {
 }
 
 void InitializeDeviceParameters(NodeContainer endDevices) {
-    std::cout << "🔧 Initializing device parameters..." << std::endl;
+    std::cout << "Initializing device parameters..." << std::endl;
     
     for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
         Ptr<LoraNetDevice> loraNetDevice = endDevices.Get(i)->GetDevice(0)->GetObject<LoraNetDevice>();
         if (!loraNetDevice) {
-            NS_FATAL_ERROR("Node " << i << " has no LoraNetDevice in InitializeDeviceParameters");
+            NS_FATAL_ERROR("Node " << i << " has no LoraNetDevice");
             continue;
         }
         
         Ptr<EndDeviceLorawanMac> mac = loraNetDevice->GetMac()->GetObject<EndDeviceLorawanMac>();
         if (!mac) {
-            NS_FATAL_ERROR("Node " << i << " has no EndDeviceLorawanMac in InitializeDeviceParameters");
+            NS_FATAL_ERROR("Node " << i << " has no EndDeviceLorawanMac");
             continue;
         }
         
@@ -170,26 +211,37 @@ void InitializeDeviceParameters(NodeContainer endDevices) {
         
         // Initialize SF if requested
         if (g_initSF) {
-            uint8_t targetSF = 10; // Default SF10 for baseline
-            uint8_t targetDR = 2;  // DR2 corresponds to SF10 in EU868
+            uint8_t targetDR = 2;  // DR2 = SF10
             mac->SetDataRate(targetDR);
-            NS_LOG_DEBUG("Node " << nodeId << " SF initialized to SF" << (int)targetSF << " (DR" << (int)targetDR << ")");
+            NS_LOG_DEBUG("Node " << nodeId << " SF initialized to DR" << (int)targetDR);
         }
         
-        // Initialize TP if requested - NOW WORKING!
+        // Initialize TP if requested
         if (g_initTP) {
-            double targetTP = 14.0; // 14 dBm default
+            double targetTP = 14.0;  // 14 dBm default
             mac->SetTransmissionPowerDbm(targetTP);
             NS_LOG_DEBUG("Node " << nodeId << " TX Power initialized to " << targetTP << " dBm");
         }
+        
+        // REMOVED INVALID CALLS:
+        // - mac->SetFType() - doesn't exist
+        // - mac->SetMType() - doesn't exist  
+        // - mac->SetAdaptiveDataRate() - doesn't exist
+        // ADR is managed by NetworkServer, not individual devices
         
         // Update initial values after configuration
         g_initialSFPerNode[nodeId] = mac->GetDataRate();
         g_initialTPPerNode[nodeId] = (uint8_t)mac->GetTransmissionPowerDbm();
     }
     
-    std::cout << "📊 Parameters initialized: SF=" << (g_initSF ? "SF10" : "default") 
+    std::cout << "Parameters initialized: SF=" << (g_initSF ? "SF10" : "default") 
               << ", TP=" << (g_initTP ? "14dBm" : "default") << std::endl;
+              
+    // Debug ADR configuration
+    if (g_enableADR) {
+        std::cout << "ADR will be managed by NetworkServer" << std::endl;
+        DebugAdrConfiguration(endDevices);
+    }
 }
 
 void CaptureEndStates(NodeContainer endDevices) {
@@ -260,7 +312,9 @@ void ExportResults(const std::string& filename, NodeContainer endDevices, int si
         for (const auto& pair : g_finalSFPerNode) {
             sfSum += (12 - pair.second); // Convert DR to SF
         }
-        avgSF = sfSum / g_finalSFPerNode.size();
+        if (g_finalSFPerNode.size() > 0) {
+            avgSF = sfSum / g_finalSFPerNode.size();
+        }
     }
     
     double toa_ms = lora::CalculateAirTime(avgSF);
@@ -280,7 +334,21 @@ void ExportResults(const std::string& filename, NodeContainer endDevices, int si
     for (const auto& pair : g_adrChangesPerNode) {
         totalAdrChanges += pair.second;
     }
-    file << "TotalADRChanges," << totalAdrChanges << "\n\n";
+    file << "TotalADRChanges," << totalAdrChanges << "\n";
+    
+    // ADR Debug section
+    if (g_enableADR) {
+        file << "ADRRequests," << g_totalAdrRequests << "\n";
+        file << "ADRResponses," << g_totalAdrResponses << "\n";
+        
+        // Count nodes with ADR changes
+        uint32_t nodesWithChanges = 0;
+        for (const auto& pair : g_adrChangesPerNode) {
+            if (pair.second > 0) nodesWithChanges++;
+        }
+        file << "NodesWithADRChanges," << nodesWithChanges << "\n";
+    }
+    file << "\n";
     
     // Per-node stats
     file << "PER_NODE_STATS\n";
@@ -306,6 +374,18 @@ void ExportResults(const std::string& filename, NodeContainer endDevices, int si
     
     file.close();
     std::cout << "✅ Results exported to " << filename << std::endl;
+    
+    // Console summary for ADR
+    if (g_enableADR && totalAdrChanges > 0) {
+        std::cout << "🔄 ADR Activity Summary:" << std::endl;
+        std::cout << "   Total ADR changes: " << totalAdrChanges << std::endl;
+        std::cout << "   Nodes affected: ";
+        uint32_t nodesWithChanges = 0;
+        for (const auto& pair : g_adrChangesPerNode) {
+            if (pair.second > 0) nodesWithChanges++;
+        }
+        std::cout << nodesWithChanges << "/" << endDevices.GetN() << std::endl;
+    }
 }
 
 // ==============================================================================
@@ -360,7 +440,14 @@ int main(int argc, char* argv[]) {
 
     // Logging
     LogComponentEnable("Scenario01Baseline", LOG_LEVEL_INFO);
-    
+    if (enableADR) {
+        LogComponentEnable("AdrComponent", LOG_LEVEL_INFO);
+        LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_INFO);
+        LogComponentEnable("NetworkServer", LOG_LEVEL_INFO);
+        std::cout << "🔍 ADR debugging enabled" << std::endl;
+    }
+    LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_DEBUG);
+
     // Create node containers
     NodeContainer endDevices, gateways;
     endDevices.Create(nDevices);
@@ -386,7 +473,14 @@ int main(int argc, char* argv[]) {
     } else {
         SetupStandardLoRa(endDevices, gateways, channel, -1); // Use default DR
     }
-    
+    if (enableADR) {
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            Ptr<LoraNetDevice> device = endDevices.Get(i)->GetDevice(0)->GetObject<LoraNetDevice>();
+            Ptr<EndDeviceLorawanMac> mac = device->GetMac()->GetObject<EndDeviceLorawanMac>();
+            mac->SetAttribute("ADR", BooleanValue(true));
+        }
+    }
+    ApplyOmnetBootstrapDefaults(endDevices, initSF, initTP);
     // TP initialization needs to be handled in SetupStandardLoRa function
     // or through LoRaPhyHelper configuration before device creation
     if (initTP) {
@@ -410,7 +504,6 @@ int main(int argc, char* argv[]) {
     Config::ConnectWithoutContext(
         "/NodeList/*/DeviceList/0/$ns3::LoraNetDevice/Mac/$ns3::EndDeviceLorawanMac/TxPower",
         MakeCallback(&OnTxPowerChange));
-
     // Run simulation
     Time totalSimulationTime = Seconds(simulationTime * 60);
     Simulator::Stop(totalSimulationTime);
@@ -438,7 +531,7 @@ int main(int argc, char* argv[]) {
         double pdr = lora::PdrPercent(g_totalReceived, g_totalSent);
         std::cout << "Overall PDR: " << std::fixed << std::setprecision(2) << pdr << "%" << std::endl;
     }
-    
+  
     // Show ADR activity if enabled
     if (enableADR) {
         uint32_t totalAdrChanges = 0;
@@ -446,6 +539,20 @@ int main(int argc, char* argv[]) {
             totalAdrChanges += pair.second;
         }
         std::cout << "Total ADR changes: " << totalAdrChanges << std::endl;
+        
+        if (totalAdrChanges == 0) {
+            std::cout << "WARNING: No ADR changes detected!" << std::endl;
+            std::cout << "Check NetworkServerHelper.EnableAdr(true) is called" << std::endl;
+            std::cout << "Verify sufficient packets per device (need >20 for ADR)" << std::endl;
+        } else {
+            std::cout << "ADR working - showing first 5 nodes with changes:" << std::endl;
+            int count = 0;
+            for (const auto& pair : g_adrChangesPerNode) {
+                if (pair.second > 0 && count++ < 5) {
+                    std::cout << "  Node " << pair.first << ": " << pair.second << " changes" << std::endl;
+                }
+            }
+        }
     }
 
     // Validate and export results

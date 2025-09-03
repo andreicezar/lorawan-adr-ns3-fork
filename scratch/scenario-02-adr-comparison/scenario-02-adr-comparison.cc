@@ -357,15 +357,17 @@ int main(int argc, char* argv[])
     // Scenario 2 Parameters - OPTIMIZED for ADR testing (100 packets per device)
     int nDevices = 100;
     int nGateways = 1;
-    int simulationTime = 200; // minutes (for exactly 100 packets per device)
-    int packetInterval = 120; // seconds - 100 packets per device
+    int simulationTime = 500; // minutes (matches OMNeT++)
+    int packetInterval = 300; // seconds (matches OMNeT++)
     double maxRandomLossDb = 5.0;
     bool adrEnabled = false; // Default to fixed SF, can be overridden
     std::string adrType = "ns3::AdrComponent";
     std::string outputPrefix = "scenario02_adr_comparison";
     std::string positionFile = "scenario_positions.csv";
     bool useFilePositions = true;
-    
+    bool initSF = true;      // Initialize spreading factor
+    bool initTP = true;      // Initialize transmit power
+
     CommandLine cmd(__FILE__);
     cmd.AddValue("adrEnabled", "Enable ADR (true) or use Fixed SF12 (false)", adrEnabled);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
@@ -407,7 +409,17 @@ int main(int argc, char* argv[])
     
     // Setup LoRa with initial SF12 (DR0) for both cases
     SetupStandardLoRa(endDevices, gateways, channel, 0); // DR0 = SF12
+
+    ApplyOmnetBootstrapDefaults(endDevices, initSF, initTP);
     
+    if (adrEnabled) {
+        for (uint32_t i = 0; i < endDevices.GetN(); ++i) {
+            auto dev = endDevices.Get(i)->GetDevice(0)->GetObject<lorawan::LoraNetDevice>();
+            auto mac = dev->GetMac()->GetObject<lorawan::EndDeviceLorawanMac>();
+            mac->SetAttribute("ADR", ns3::BooleanValue(true));
+        }
+    }
+
     // CRITICAL: Manually enable ADR on devices AFTER LoRa setup
     EnableAdrRequestsOnDevices(endDevices, adrEnabled);
     
