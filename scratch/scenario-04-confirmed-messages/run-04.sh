@@ -33,6 +33,7 @@ run_config() {
     
     if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
         --simulationTime=80 \
+        --packetInterval=600 \
         --positionFile=scenario_positions.csv \
         --useFilePositions=true \
         --confirmedMessages=$confirmed_messages \

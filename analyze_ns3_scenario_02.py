@@ -11,16 +11,69 @@ Expected file contents (as produced by scenario-02-adr-comparison.cc):
 
 This script:
 - Parses the "OVERALL_STATS" and "PER_NODE_STATS" blocks
-- NEW: Extracts and prints initialization conditions from CSV or shell script
+- Extracts and prints initialization conditions from CSV or shell script
 - Computes a scoreboard for ADR ON vs ADR OFF with deltas
 - Prints a compact context table and metrics
+
+NEW:
+- Auto-discovers CSVs in: output/scenario-02-adr-comparison/<sub-scenario>/*_results.csv
+  (You can still pass files/dirs explicitly.)
 """
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 import argparse, csv, io, math, sys, re
 
+# -------------------------------------------------------------------
+# Defaults & discovery
+# -------------------------------------------------------------------
+DEFAULT_BASE_DIR = Path("output") / "scenario-02-adr-comparison"
+
+def discover_default_csvs(base_dir: Path) -> List[Path]:
+    """
+    Recursively find results CSVs under:
+        base_dir/<sub-scenario>/*_results.csv
+    Accepts common names like 'result_results.csv' or '..._results.csv'.
+    """
+    if not base_dir.exists():
+        return []
+    csvs: List[Path] = []
+    for pat in ("*_results.csv", "*-results.csv", "result_results.csv"):
+        csvs.extend(sorted(base_dir.rglob(pat)))
+    # De-dup while preserving order
+    seen = set()
+    uniq: List[Path] = []
+    for f in csvs:
+        if f.exists() and f not in seen:
+            uniq.append(f); seen.add(f)
+    return uniq
+
+def collect_csvs(inputs: List[Path]) -> List[Path]:
+    """
+    From a mix of files/dirs/globs, collect matching CSVs.
+    """
+    files: List[Path] = []
+    for p in inputs:
+        if p.is_file():
+            files.append(p)
+        elif p.is_dir():
+            files.extend(sorted(p.rglob("*_results.csv")))
+        else:
+            # allow glob-like patterns (if the shell didn't expand)
+            if any(ch in str(p) for ch in "*?[]"):
+                files.extend([q for q in p.parent.glob(p.name) if q.is_file()])
+    # de-dup and keep order
+    seen = set()
+    uniq: List[Path] = []
+    for f in files:
+        if f.exists() and f not in seen:
+            uniq.append(f); seen.add(f)
+    return uniq
+
+# -------------------------------------------------------------------
+# Tiny helpers
+# -------------------------------------------------------------------
 def _num(x):
     try:
         if x is None: return None
@@ -48,133 +101,106 @@ def _to_bool(x):
     return None
 
 # =============================================================================
-# NEW: Extract initialization conditions
+# Extract initialization conditions
 # =============================================================================
 def extract_init_conditions_from_csv(overall: Dict[str, Any], per_node: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Extract initialization conditions from ns-3 CSV output"""
     init_conditions = {}
-    
-    # Basic simulation parameters from OVERALL_STATS
     init_conditions["numberOfNodes"] = len(per_node)
     init_conditions["evaluateADRinServer"] = overall.get("ADR_Enabled", False)
-    
-    # Try to extract initial conditions from per-node data
+
     if per_node:
-        # Get initial SF and TP from first node (assuming all nodes start the same)
         first_node = per_node[0]
         if isinstance(first_node.get("InitialSF"), int):
             init_conditions["initialLoRaSF"] = first_node["InitialSF"]
         if isinstance(first_node.get("InitialTP_dBm"), (int, float)):
             init_conditions["initialLoRaTP_dBm"] = float(first_node["InitialTP_dBm"])
-    
-    # Try to infer simulation parameters
+
     if overall.get("TotalSent") and len(per_node) > 0:
-        # Estimate packets per device
-        total_sent = overall["TotalSent"]
-        packets_per_device = total_sent / len(per_node)
+        packets_per_device = overall["TotalSent"] / len(per_node)
         init_conditions["estimatedPacketsPerDevice"] = int(packets_per_device)
-    
+
     return init_conditions
 
 def extract_init_conditions_from_shell(shell_script_path: Path) -> Dict[str, Any]:
     """Extract initialization conditions from shell run script"""
     init_conditions = {}
-    
-    if not shell_script_path.exists():
+    if not shell_script_path or not shell_script_path.exists():
         return init_conditions
-    
     try:
         script_content = shell_script_path.read_text(encoding="utf-8")
-        
-        # Extract simulation time
-        sim_time_match = re.search(r"SIM_TIME\s*=\s*(\d+)", script_content)
-        if sim_time_match:
-            init_conditions["simTime_min"] = int(sim_time_match.group(1))
-            init_conditions["simTime_s"] = int(sim_time_match.group(1)) * 60
-        
-        # Extract packet interval
-        pkt_interval_match = re.search(r"PKT_INTERVAL\s*=\s*(\d+)", script_content)
-        if pkt_interval_match:
-            init_conditions["sendInterval_s"] = int(pkt_interval_match.group(1))
-        
-        # Extract command line parameters
-        cmd_matches = re.findall(r"--(\w+)=([^\s]+)", script_content)
-        for param, value in cmd_matches:
+        # SIM_TIME (minutes)
+        m = re.search(r"\bSIM_TIME\s*=\s*(\d+)", script_content)
+        if m:
+            init_conditions["simTime_min"] = int(m.group(1))
+            init_conditions["simTime_s"] = int(m.group(1)) * 60
+        # PKT_INTERVAL (seconds)
+        m = re.search(r"\bPKT_INTERVAL\s*=\s*(\d+)", script_content)
+        if m:
+            init_conditions["sendInterval_s"] = int(m.group(1))
+        # Command-line flags (fallbacks)
+        for param, value in re.findall(r"--(\w+)=([^\s]+)", script_content):
             if param == "simulationTime":
                 init_conditions["simTime_min"] = int(value)
                 init_conditions["simTime_s"] = int(value) * 60
             elif param == "packetInterval":
                 init_conditions["sendInterval_s"] = int(value)
-            elif param == "adrEnabled":
+            elif param in ("adrEnabled","enableADR"):
                 init_conditions["evaluateADRinServer"] = value.lower() == "true"
-        
     except Exception as e:
         print(f"Warning: Could not parse shell script {shell_script_path}: {e}")
-    
     return init_conditions
 
-def find_shell_script(csv_path: Path) -> Optional[Path]:
-    """Try to find the corresponding shell script for a CSV file"""
-    # Common locations to look for shell scripts
-    search_paths = [
-        csv_path.parent / "run-02.sh",
-        csv_path.parent.parent / "run-02.sh", 
-        csv_path.parent.parent.parent / "run-02.sh",
+def find_shell_script_near(path: Path) -> Optional[Path]:
+    """
+    Try a few common places for run-02.sh relative to a CSV or a base directory.
+    """
+    candidates = [
+        path / "run-02.sh" if path.is_dir() else path.parent / "run-02.sh",
+        path.parent / "run-02.sh",
+        path.parent.parent / "run-02.sh",
         Path("run-02.sh"),
         Path("scripts/run-02.sh"),
     ]
-    
-    for path in search_paths:
-        if path.exists():
-            return path
+    for p in candidates:
+        if p.exists():
+            return p
     return None
 
 def print_init_conditions(config_name: str, init_conditions: Dict[str, Any], source: str = "CSV") -> None:
     """Print initialization conditions in a formatted table"""
     print(f"\n=== INITIALIZATION CONDITIONS: {config_name} (from {source}) ===")
     print("-" * 65)
-    
-    # Core simulation parameters
     core_params = [
         ("Number of Nodes", "numberOfNodes", ""),
         ("Simulation Time", "simTime_min", "min"),
-        ("Send Interval", "sendInterval_s", "s"), 
+        ("Send Interval", "sendInterval_s", "s"),
         ("ADR Enabled", "evaluateADRinServer", ""),
     ]
-    
     for label, key, unit in core_params:
         val = init_conditions.get(key, "NOT FOUND")
         unit_str = f" {unit}" if unit and val != "NOT FOUND" else ""
         print(f"{label:<25}: {val}{unit_str}")
-    
     print("-" * 30)
-    
-    # Radio parameters (mostly inferred)
     radio_params = [
         ("Initial SF", "initialLoRaSF", ""),
         ("Initial TP", "initialLoRaTP_dBm", "dBm"),
         ("Estimated pkts/device", "estimatedPacketsPerDevice", ""),
     ]
-    
     for label, key, unit in radio_params:
         val = init_conditions.get(key, "NOT FOUND")
         unit_str = f" {unit}" if unit and val != "NOT FOUND" else ""
         print(f"{label:<25}: {val}{unit_str}")
-    
-    # Calculate expected packets per device if we have timing info
     if "simTime_s" in init_conditions and "sendInterval_s" in init_conditions:
         expected_packets = int(init_conditions["simTime_s"] / init_conditions["sendInterval_s"])
         print(f"{'Expected pkts/device':<25}: {expected_packets}")
-    
-    # Note about defaults (since ns-3 config is less explicit than OMNeT++)
     print(f"{'Radio defaults':<25}: SF12, 14dBm (inferred)")
     print(f"{'Bandwidth':<25}: 125 kHz (EU868 default)")
     print(f"{'Coding Rate':<25}: 4/5 (LoRaWAN default)")
-    
     print("=" * 65)
 
 # =============================================================================
-# Original parsing functions
+# Parsing functions
 # =============================================================================
 def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]]]:
     """
@@ -193,7 +219,7 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
     except StopIteration:
         raise RuntimeError(f"PER_NODE_STATS section not found in {path.name}")
 
-    # Parse overall block: lines after OVERALL_STATS until blank or PER_NODE_STATS
+    # Parse overall block
     overall: Dict[str,Any] = {}
     i = idx_overall + 1
     while i < len(txt) and i < idx_node:
@@ -205,7 +231,6 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
             k, v = line.split(",", 1)
             k = k.strip()
             val = v.strip()
-            # convert common fields
             if k == "ADR_Enabled":
                 overall[k] = _to_bool(val)
             elif k in ("TotalSent","TotalReceived","TotalADRCommands"):
@@ -213,14 +238,12 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
             elif k in ("PDR_Percent","TotalAirTime_ms","AirtimeReduction_vs_SF12_Percent"):
                 overall[k] = _to_float(val)
             else:
-                # best effort
                 nv = _to_float(val)
                 overall[k] = nv if nv is not None else val
         i += 1
 
-    # Parse per-node CSV starting at the header line (line after PER_NODE_STATS)
+    # Parse per-node CSV
     header_line_idx = idx_node + 1
-    # Collect subsequent lines that look like CSV rows (stop only at EOF)
     csv_text = "\n".join(txt[header_line_idx:]).strip()
     if not csv_text:
         raise RuntimeError(f"PER_NODE_STATS table appears empty in {path.name}")
@@ -228,9 +251,8 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
     reader = csv.DictReader(io.StringIO(csv_text))
     rows: List[Dict[str,Any]] = []
     for r in reader:
-        if not any((r or {}).values()):  # skip empty
+        if not any((r or {}).values()):
             continue
-        # normalize numeric fields
         for k in list(r.keys()):
             if k is None: 
                 continue
@@ -245,25 +267,24 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
         rows.append(r)
     return overall, rows
 
-def summarize(overall: Dict[str,Any], per_node: List[Dict[str,Any]], csv_path: Path) -> Dict[str,Any]:
+# =============================================================================
+# Summarization
+# =============================================================================
+def summarize(overall: Dict[str,Any], per_node: List[Dict[str,Any]], csv_path: Path, shell_script: Optional[Path]=None) -> Dict[str,Any]:
     """
     Produce a unified summary similar to the FLoRa analyzer.
-    NEW: Also extracts initialization conditions
+    Also extracts initialization conditions (CSV + optional shell script).
     """
     res: Dict[str,Any] = {}
-    
-    # NEW: Extract initialization conditions
+
     init_conditions = extract_init_conditions_from_csv(overall, per_node)
-    
-    # Try to find and parse shell script for additional init conditions
-    shell_script = find_shell_script(csv_path)
     if shell_script:
         shell_conditions = extract_init_conditions_from_shell(shell_script)
-        init_conditions.update(shell_conditions)  # Shell script takes precedence
+        init_conditions.update(shell_conditions)
         source = f"CSV + {shell_script.name}"
     else:
         source = "CSV only"
-    
+
     # Print initialization conditions
     config_name = csv_path.stem
     if "adr" in config_name.lower() and "enabled" in config_name.lower():
@@ -272,12 +293,9 @@ def summarize(overall: Dict[str,Any], per_node: List[Dict[str,Any]], csv_path: P
         config_label = "scenario-02-fixed-sf12"
     else:
         config_label = config_name
-    
     print_init_conditions(config_label, init_conditions, source)
-    
-    # Store init conditions in result
     res["_init_conditions"] = init_conditions
-    
+
     # Core totals
     res["Nodes"] = len(per_node)
     res["Total Sent"] = overall.get("TotalSent")
@@ -320,6 +338,9 @@ def summarize(overall: Dict[str,Any], per_node: List[Dict[str,Any]], csv_path: P
     res["_per_node_rows"] = per_node
     return res
 
+# =============================================================================
+# Printing
+# =============================================================================
 def fmt_num(x, digits=2):
     return f"{x:.{digits}f}" if isinstance(x, (int,float)) else "NA"
 
@@ -396,12 +417,14 @@ def print_scoreboard(rows: List[Dict[str,Any]]):
         print(f"{labels[k]:<28} {fmt_num(a,3):>18} {fmt_num(b,3):>18} {fmt_num(delta,3):>18}")
     print("="*120)
 
-def analyze_files(files: List[Path]) -> None:
+# =============================================================================
+# Glue
+# =============================================================================
+def analyze_files(files: List[Path], shell_script: Optional[Path]=None) -> None:
     results: List[Dict[str,Any]] = []
     for p in files:
         overall, per_node = parse_ns3_results_csv(p)
-        summary = summarize(overall, per_node, p)  # Pass path for init condition extraction
-        # heuristic config label
+        summary = summarize(overall, per_node, p, shell_script or find_shell_script_near(p))
         label = p.stem
         if "adr" in label.lower() and "enabled" in label.lower():
             summary["Configuration"] = "scenario-02-adr-enabled"
@@ -411,24 +434,32 @@ def analyze_files(files: List[Path]) -> None:
             summary["Configuration"] = label
         results.append(summary)
 
-    # context and scoreboard
     print_context(results)
     print_scoreboard(results)
 
 def main():
     ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 02 (ADR vs Fixed SF12) CSV results")
-    ap.add_argument("paths", nargs="+", help="Paths to ns-3 CSV result files")
+    ap.add_argument("paths", nargs="*", help="(optional) CSV files or directories containing '*_results.csv'")
+    ap.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR,
+                    help="Root folder that contains sub-scenarios (default: output/scenario-02-adr-comparison)")
     ap.add_argument("--shell-script", type=Path, default=None, 
-                    help="Path to shell script for additional init conditions")
+                    help="Path to run-02.sh for additional init conditions (optional)")
     args = ap.parse_args()
-    
-    files = [Path(p) for p in args.paths]
-    for f in files:
-        if not f.exists():
-            print(f"File not found: {f}", file=sys.stderr)
-            sys.exit(2)
-    
-    analyze_files(files)
+
+    inputs = [Path(p) for p in args.paths]
+    files = collect_csvs(inputs) if inputs else discover_default_csvs(args.base_dir)
+
+    if not files:
+        print(f"No CSV files found. Looked under: {args.base_dir.resolve()}")
+        if inputs:
+            print("Also checked provided paths:")
+            for p in inputs: print(f"  - {p}")
+        sys.exit(2)
+
+    # Prefer user-provided shell script; else try near base dir; else near first CSV
+    shell_path = args.shell_script or find_shell_script_near(args.base_dir) or find_shell_script_near(files[0])
+
+    analyze_files(files, shell_path)
 
 if __name__ == "__main__":
     main()
