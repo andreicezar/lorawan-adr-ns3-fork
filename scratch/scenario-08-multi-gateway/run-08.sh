@@ -9,11 +9,22 @@ echo "📊 Baseline: 200 devices, DR2(SF10), interval 300s, sim 200min"
 cd "$(dirname "$0")/../.."
 
 SCENARIO_PATH="scratch/scenario-08-multi-gateway/scenario-08-multi-gateway"
-OUTPUT_BASE="output/scenario-08-multi-gateway"
+
+# --- derive CSV tag from POSITION_FILE exported by run-all.sh ---
+POS="${POSITION_FILE:-scenario_positions.csv}"
+csv_base="$(basename "$POS")"
+if [[ "$csv_base" =~ ^scenario_positions_(.+)\.csv$ ]]; then
+  POS_TAG="${BASH_REMATCH[1]}"   # e.g. "1x1km", "3x3km", ...
+else
+  POS_TAG="$(echo "$csv_base" | sed -E 's/[^A-Za-z0-9]+/_/g; s/^_+|_+$//g')"
+fi
+
+# outputs now keyed by CSV tag
+OUTPUT_BASE="output/scenario-08-multi-gateway_${POS_TAG}"
+
 SIM_MIN=200
 NDEV=200
 GW_SPACING=2000
-POSITION_FILE="scenario_positions.csv"
 
 # run_config <name> <init_sf:true|false> <init_tp:true|false> <enable_adr:true|false> [targetSF targetTP]
 run_config() {
@@ -36,6 +47,7 @@ run_config() {
   echo "🚀 Running: ${name}"
   echo "   nGW=${NGW}, initSF=${init_sf}(${target_sf}), initTP=${init_tp}(${target_tp} dBm), ADR=${enable_adr}"
   echo "📁 Output: ${out_dir}"
+  echo "🗺️  Positions CSV: ${POS}"
 
   local cmd="./ns3 run \"${SCENARIO_PATH} \
     --nGateways=${NGW} \
@@ -43,7 +55,7 @@ run_config() {
     --gatewaySpacing=${GW_SPACING} \
     --simulationTime=${SIM_MIN} \
     --useFilePositions=true \
-    --positionFile=${POSITION_FILE} \
+    --positionFile=${POS} \
     --outputPrefix=${out_dir}/result"
 
   # Pass the new flags only when requested
@@ -71,14 +83,9 @@ run_config() {
 run_all_scenarios() {
   local FAILED_CASES=()
 
-  run_config "1gw" "true" "true" "false" 10 14
-  [ $? -eq 0 ] || FAILED_CASES+=("1gw")
-
-  run_config "2gw" "true" "true" "false" 10 14
-  [ $? -eq 0 ] || FAILED_CASES+=("2gw")
-
-  run_config "4gw" "true" "true" "false" 10 14
-  [ $? -eq 0 ] || FAILED_CASES+=("4gw")
+  run_config "1gw" "true" "true" "false" 10 14     || FAILED_CASES+=("1gw")
+  run_config "2gw" "true" "true" "false" 10 14     || FAILED_CASES+=("2gw")
+  run_config "4gw" "true" "true" "false" 10 14     || FAILED_CASES+=("4gw")
 
   echo ""
   if [ ${#FAILED_CASES[@]} -eq 0 ]; then

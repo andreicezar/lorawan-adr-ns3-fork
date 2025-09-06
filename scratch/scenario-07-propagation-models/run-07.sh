@@ -8,6 +8,15 @@ echo "📊 Config: 50 devices, 1 gateway, 120min, radial placement"
 
 cd "$(dirname "$0")/../.."
 
+# --- derive CSV tag from POSITION_FILE exported by run-all.sh ---
+POS="${POSITION_FILE:-scenario_positions.csv}"
+csv_base="$(basename "$POS")"
+if [[ "$csv_base" =~ ^scenario_positions_(.+)\.csv$ ]]; then
+  POS_TAG="${BASH_REMATCH[1]}"   # e.g. "1x1km", "3x3km"
+else
+  POS_TAG="$(echo "$csv_base" | sed -E 's/[^A-Za-z0-9]+/_/g; s/^_+|_+$//g')"
+fi
+
 # Function to run a single configuration
 run_config() {
     local name="$1"
@@ -45,7 +54,8 @@ run_config() {
             ;;
     esac
     
-    local output_folder="output/scenario-07-propagation-models/$name"
+    # Output folder now follows CSV tag
+    local output_folder="output/scenario-07-propagation-models_${POS_TAG}/$name"
     mkdir -p "$output_folder"
     
     echo ""
@@ -54,12 +64,13 @@ run_config() {
         echo "   Path loss exponent: $path_loss_exponent"
     fi
     echo "📁 Output directory: $output_folder"
+    echo "🗺️  Positions CSV: $POS"
     echo "⚙️ Config: SF${target_sf}, ${target_tp}dBm, ${propagation_model} model"
     
     # Build command with conditional path loss exponent
     local cmd="./ns3 run \"scratch/scenario-07-propagation-models/scenario-07-propagation-models \
         --simulationTime=120 \
-        --positionFile=scenario_positions.csv \
+        --positionFile=${POS} \
         --useFilePositions=true \
         --maxDistance=5000 \
         --propagationModel=$propagation_model \
@@ -118,7 +129,7 @@ run_all_scenarios() {
     echo ""
     if [ ${#FAILED_CASES[@]} -eq 0 ]; then
         echo "✅ All propagation model scenarios completed successfully!"
-        echo "📈 Results available under: output/scenario-07-propagation-models/"
+        echo "📈 Results available under: output/scenario-07-propagation-models_${POS_TAG}/"
         echo ""
         echo "📊 Propagation models tested:"
         echo "   - LogDistance (n=3.2, 3.5, 3.76, 4.0)"

@@ -8,6 +8,15 @@ echo "📊 Config: 100 devices, 1 gateway, varying intervals and sim times"
 
 cd "$(dirname "$0")/../.."
 
+# --- derive CSV tag from POSITION_FILE exported by run-all.sh ---
+POS="${POSITION_FILE:-scenario_positions.csv}"
+csv_base="$(basename "$POS")"
+if [[ "$csv_base" =~ ^scenario_positions_(.+)\.csv$ ]]; then
+  POS_TAG="${BASH_REMATCH[1]}"   # e.g. "1x1km", "3x3km"
+else
+  POS_TAG="$(echo "$csv_base" | sed -E 's/[^A-Za-z0-9]+/_/g; s/^_+|_+$//g')"
+fi
+
 # Function to run a single configuration
 run_config() {
     local name="$1"
@@ -36,17 +45,19 @@ run_config() {
             ;;
     esac
     
-    local output_folder="output/scenario-05-traffic-patterns/interval-${packet_interval}s"
+    # Output folder now follows CSV tag
+    local output_folder="output/scenario-05-traffic-patterns_${POS_TAG}/interval-${packet_interval}s"
     mkdir -p "$output_folder"
     
     echo ""
     echo "🚀 Running simulation: ${name} (${packet_interval}s intervals)"
     echo "📁 Output directory: $output_folder"
+    echo "🗺️  Positions CSV: $POS"
     echo "⚙️  Config: SF${target_sf}, ${target_tp}dBm, ${packet_interval}s intervals, ${sim_time}min"
     
     if ./ns3 run "scratch/scenario-05-traffic-patterns/scenario-05-traffic-patterns \
         --simulationTime=$sim_time \
-        --positionFile=scenario_positions.csv \
+        --positionFile=${POS} \
         --useFilePositions=true \
         --packetInterval=$packet_interval \
         --outputPrefix=$output_folder/result"; then
@@ -80,9 +91,9 @@ run_all_scenarios() {
     if [ ${#FAILED_CASES[@]} -eq 0 ]; then
         echo "✅ All traffic pattern scenarios completed successfully!"
         echo "📈 Results available in:"
-        echo "   - output/scenario-05-traffic-patterns/interval-600s/ (LOW traffic: 10min intervals)"
-        echo "   - output/scenario-05-traffic-patterns/interval-300s/ (MEDIUM traffic: 5min intervals)"
-        echo "   - output/scenario-05-traffic-patterns/interval-60s/ (HIGH traffic: 1min intervals)"
+        echo "   - output/scenario-05-traffic-patterns_${POS_TAG}/interval-600s/ (LOW traffic: 10min intervals)"
+        echo "   - output/scenario-05-traffic-patterns_${POS_TAG}/interval-300s/ (MEDIUM traffic: 5min intervals)"
+        echo "   - output/scenario-05-traffic-patterns_${POS_TAG}/interval-60s/ (HIGH traffic: 1min intervals)"
     else
         echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
         echo "❌ Check the simulation output above for error details"

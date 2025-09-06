@@ -8,6 +8,15 @@ echo "📊 Config: 100 devices, 1 gateway, 80min, 120s intervals"
 
 cd "$(dirname "$0")/../.."
 
+# --- derive CSV tag from POSITION_FILE exported by run-all.sh ---
+POS="${POSITION_FILE:-scenario_positions.csv}"
+csv_base="$(basename "$POS")"
+if [[ "$csv_base" =~ ^scenario_positions_(.+)\.csv$ ]]; then
+  POS_TAG="${BASH_REMATCH[1]}"   # e.g. "1x1km", "3x3km"
+else
+  POS_TAG="$(echo "$csv_base" | sed -E 's/[^A-Za-z0-9]+/_/g; s/^_+|_+$//g')"
+fi
+
 # Function to run a single configuration
 run_config() {
     local name="$1"
@@ -23,18 +32,20 @@ run_config() {
         confirmed_messages="true"
     fi
     
-    local output_folder="output/scenario-04-confirmed-messages/${name}"
+    # Output folder now follows CSV tag
+    local output_folder="output/scenario-04-confirmed-messages_${POS_TAG}/${name}"
     mkdir -p "$output_folder"
     
     echo ""
     echo "🚀 Running simulation: ${name} messages"
     echo "📁 Output directory: $output_folder"
+    echo "🗺️  Positions CSV: $POS"
     echo "⚙️  Config: SF${target_sf}, ${target_tp}dBm, Confirmed=${confirmed_messages}"
     
     if ./ns3 run "scratch/scenario-04-confirmed-messages/scenario-04-confirmed-messages \
         --simulationTime=80 \
         --packetInterval=600 \
-        --positionFile=scenario_positions.csv \
+        --positionFile=${POS} \
         --useFilePositions=true \
         --confirmedMessages=$confirmed_messages \
         --outputPrefix=$output_folder/result"; then
@@ -64,9 +75,7 @@ run_all_scenarios() {
     echo ""
     if [ ${#FAILED_CASES[@]} -eq 0 ]; then
         echo "✅ All confirmed vs unconfirmed scenarios completed successfully!"
-        echo "📈 Results available in:"
-        echo "   - output/scenario-04-confirmed-messages/unconfirmed/ (UNCONFIRMED messages)"
-        echo "   - output/scenario-04-confirmed-messages/confirmed/ (CONFIRMED messages)"
+        echo "📈 Results available in: output/scenario-04-confirmed-messages_${POS_TAG}/"
     else
         echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
         echo "❌ Check the simulation output above for error details"

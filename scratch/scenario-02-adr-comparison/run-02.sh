@@ -8,6 +8,15 @@ echo "📊 Config: 100 devices, 1 gateway, 500min, 300s intervals"
 
 cd "$(dirname "$0")/../.."
 
+# --- derive CSV tag from POSITION_FILE exported by run-all.sh ---
+POS="${POSITION_FILE:-scenario_positions.csv}"
+csv_base="$(basename "$POS")"
+if [[ "$csv_base" =~ ^scenario_positions_(.+)\.csv$ ]]; then
+  POS_TAG="${BASH_REMATCH[1]}"
+else
+  POS_TAG="$(echo "$csv_base" | sed -E 's/[^A-Za-z0-9]+/_/g; s/^_+|_+$//g')"
+fi
+
 # Simulation parameters
 SIM_TIME=500
 PKT_INTERVAL=300
@@ -20,23 +29,25 @@ run_config() {
     local enable_adr="$4"
     local target_sf="${5:-12}"  # Default SF12 if not provided
     local target_tp="${6:-14}"  # Default 14dBm if not provided
-    
-    local output_folder="output/scenario-02-adr-comparison/${name}"
+
+    # Output folder now follows CSV tag
+    local output_folder="output/scenario-02-adr-comparison_${POS_TAG}/${name}"
     mkdir -p "$output_folder"
-    
+
     echo ""
     echo "🚀 Running simulation: ${name}"
     echo "📁 Output directory: $output_folder"
+    echo "🗺️  Positions CSV: $POS"
     echo "⚙️  Config: initSF=$init_sf, initTP=$init_tp, ADR=$enable_adr"
     if [ "$enable_adr" = "true" ]; then
         echo "🎯 Target: SF$target_sf, ${target_tp}dBm"
     else
         echo "🔒 Fixed: SF$target_sf, ${target_tp}dBm (no adaptation)"
     fi
-    
+
     if ./ns3 run "scratch/scenario-02-adr-comparison/scenario-02-adr-comparison \
         --simulationTime=${SIM_TIME} \
-        --positionFile=scenario_positions.csv \
+        --positionFile=${POS} \
         --useFilePositions=true \
         --packetInterval=${PKT_INTERVAL} \
         --outputPrefix=$output_folder/result \
@@ -55,20 +66,20 @@ run_all_scenarios() {
 
     # Scenario 2: Core ADR comparison (SF12, 14dBm initial for both)
     # Format: run_config "name" "initSF" "initTP" "enableADR" [targetSF] [targetTP]
-    
+
     # Case 1: ADR DISABLED - fixed SF12, 14dBm (no adaptation)
     run_config "fixed-sf12" "true" "true" "false" 12 14
     [ $? -eq 0 ] || FAILED_CASES+=("fixed-sf12")
-    
+
     # Case 2: ADR ENABLED - starts SF12, 14dBm but adapts during simulation
     run_config "adr-enabled" "true" "true" "true" 12 14
     [ $? -eq 0 ] || FAILED_CASES+=("adr-enabled")
-    
+
     # Final summary
     echo ""
     if [ ${#FAILED_CASES[@]} -eq 0 ]; then
         echo "✅ All ADR comparison scenarios completed successfully!"
-        echo "📈 Results available in output/scenario-02-adr-comparison/"
+        echo "📈 Results: output/scenario-02-adr-comparison_${POS_TAG}/"
     else
         echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
         echo "❌ Check the simulation output above for error details"
