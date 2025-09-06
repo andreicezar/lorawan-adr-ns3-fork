@@ -134,10 +134,10 @@ void OnPacketSent(Ptr<const Packet> packet) {
         g_farCohortSent++;
     }
     
-    double currentTime = Simulator::Now().GetSeconds();
-    NS_LOG_DEBUG("Node " << nodeId << " (" << (g_isNearNode[nodeId] ? "NEAR" : "FAR") 
-               << ") sent packet #" << g_sentPacketsPerNode[nodeId] 
-               << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
+    // double currentTime = Simulator::Now().GetSeconds();
+    // NS_LOG_DEBUG("Node " << nodeId << " (" << (g_isNearNode[nodeId] ? "NEAR" : "FAR") 
+    //            << ") sent packet #" << g_sentPacketsPerNode[nodeId] 
+    //            << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet)
@@ -163,14 +163,14 @@ void OnGatewayReceive(Ptr<const Packet> packet)
             if (g_isNearNode[nodeId]) g_nearCohortReceived++;
             else                      g_farCohortReceived++;
 
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId
-                         << " (" << (g_isNearNode[nodeId] ? "NEAR" : "FAR") << ") "
-                         << "at distance " << std::fixed << std::setprecision(0)
-                         << g_nodeDistances[nodeId] << "m");
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId
+            //              << " (" << (g_isNearNode[nodeId] ? "NEAR" : "FAR") << ") "
+            //              << "at distance " << std::fixed << std::setprecision(0)
+            //              << g_nodeDistances[nodeId] << "m");
         }
         else
         {
-            NS_LOG_DEBUG("Unknown DevAddr (not in map)");
+            // NS_LOG_DEBUG("Unknown DevAddr (not in map)");
         }
     }
 }

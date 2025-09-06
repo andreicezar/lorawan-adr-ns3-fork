@@ -150,7 +150,7 @@ void OnPacketSent(Ptr<const Packet> packet) {
     g_totalAirTimePerNode[nodeId] += airTime;
     g_totalAirTime += airTime;
     
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
 void OnPacketDestroyed(Ptr<const Packet> packet, uint32_t nodeId, uint8_t interferingSF) {
@@ -160,13 +160,13 @@ void OnPacketDestroyed(Ptr<const Packet> packet, uint32_t nodeId, uint8_t interf
         g_interferencePerNode[nodeId]++;
         g_interferencePerSF[interferingSF]++;
         
-        NS_LOG_DEBUG("Node " << nodeId << " packet destroyed by SF" << (int)interferingSF << " interference");
+        // NS_LOG_DEBUG("Node " << nodeId << " packet destroyed by SF" << (int)interferingSF << " interference");
     } else {
         // Packet was lost due to collision (generic)
         g_totalCollisions++;
         g_collisionsPerNode[nodeId]++;
         
-        NS_LOG_DEBUG("Node " << nodeId << " packet lost due to collision");
+        // NS_LOG_DEBUG("Node " << nodeId << " packet lost due to collision");
     }
 }
 
@@ -195,7 +195,7 @@ void OnPacketSentWithCollisionTracking(Ptr<const Packet> packet) {
         g_interferencePerNode[nodeId] = 0;
     }
     
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet)
@@ -242,7 +242,7 @@ void OnGatewayReceive(Ptr<const Packet> packet)
                 }
             }
             
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
         }
     }
 }

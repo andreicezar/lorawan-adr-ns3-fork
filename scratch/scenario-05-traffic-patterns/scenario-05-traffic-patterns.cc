@@ -71,8 +71,8 @@ void OnPacketSent(Ptr<const Packet> packet) {
     g_totalAirTimePerNode[nodeId] += airTime;
     g_totalChannelAirTime += airTime;
     
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId] 
-               << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId] 
+    //            << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet)
@@ -95,9 +95,9 @@ void OnGatewayReceive(Ptr<const Packet> packet)
             g_receivedPacketsPerNode[nodeId]++;
             g_totalReceived++;
             
-            double currentTime = Simulator::Now().GetSeconds();
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId 
-                       << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
+            // double currentTime = Simulator::Now().GetSeconds();
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId 
+            //            << " at " << std::fixed << std::setprecision(2) << currentTime << "s");
         }
     }
 }

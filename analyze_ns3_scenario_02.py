@@ -2,22 +2,11 @@
 """
 Analyze ns-3 LoRaWAN Scenario 02 outputs (ADR vs fixed SF12).
 
-Expected file contents (as produced by scenario-02-adr-comparison.cc):
-- Header lines (human-readable)
-- "OVERALL_STATS" section (key,value per line)
-- blank line
-- "PER_NODE_STATS" section
-- a CSV header row followed by rows for each node
+Now area-aware:
+  --area 1x1km  # auto-reads output/scenario-02-adr-comparison_1x1km/
+Also accepts compact 1km..5km and normalizes to NxNkm.
 
-This script:
-- Parses the "OVERALL_STATS" and "PER_NODE_STATS" blocks
-- Extracts and prints initialization conditions from CSV or shell script
-- Computes a scoreboard for ADR ON vs ADR OFF with deltas
-- Prints a compact context table and metrics
-
-NEW:
-- Auto-discovers CSVs in: output/scenario-02-adr-comparison/<sub-scenario>/*_results.csv
-  (You can still pass files/dirs explicitly.)
+You can still pass explicit files/dirs/globs.
 """
 
 from __future__ import annotations
@@ -70,6 +59,31 @@ def collect_csvs(inputs: List[Path]) -> List[Path]:
         if f.exists() and f not in seen:
             uniq.append(f); seen.add(f)
     return uniq
+
+# ----------------------- area helpers --------------------------
+def normalize_area(area: Optional[str]) -> Optional[str]:
+    """
+    Accepts '1x1km' or compact '1km'..'5km' and normalizes to 'NxNkm'.
+    """
+    if not area: return None
+    a = area.strip().lower().replace(" ", "")
+    m = re.match(r"^([1-5])(?:x\1)?km$", a)  # 1km or 1x1km
+    return f"{m.group(1)}x{m.group(1)}km" if m else a
+
+def resolve_area_base(base_dir: Path, area: Optional[str]) -> tuple[Path, Optional[List[str]]]:
+    """
+    If area is provided, return base_dir_<area>.
+    If not and base_dir doesn't exist but suffixed dirs do, return suggestions.
+    """
+    if area:
+        return base_dir.parent / f"{base_dir.name}_{normalize_area(area)}", None
+    if base_dir.exists():
+        return base_dir, None
+    parent = base_dir.parent
+    prefix = base_dir.name + "_"
+    options = sorted([d.name.split("_",1)[1] for d in parent.iterdir()
+                      if d.is_dir() and d.name.startswith(prefix)])
+    return base_dir, options if options else None
 
 # -------------------------------------------------------------------
 # Tiny helpers
@@ -254,7 +268,7 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str,Any], List[Dict[str,Any]
         if not any((r or {}).values()):
             continue
         for k in list(r.keys()):
-            if k is None: 
+            if k is None:
                 continue
             kk = k.strip()
             v = (r[k] or "").strip()
@@ -362,7 +376,7 @@ def print_context(rows: List[Dict[str,Any]]):
         print(fmt.format(*row))
     print("="*100)
 
-def print_scoreboard(rows: List[Dict[str,Any]]):
+def print_scoreboard(rows: List[Dict[str,Any]], title_suffix: str = ""):
     keys = [
         "Total Sent",
         "Total Received",
@@ -390,7 +404,7 @@ def print_scoreboard(rows: List[Dict[str,Any]]):
 
     def is_on(r): return bool(r.get("ADR Enabled", False))
     if len(rows) < 2:
-        print("\n=== Scenario 02 - Scoreboard ===")
+        print("\n=== Scenario 02 - Scoreboard {}===".format(f"[{title_suffix}]" if title_suffix else ""))
         for r in rows:
             print(f"\n[{r.get('Configuration','')}]")
             for k in keys:
@@ -405,8 +419,11 @@ def print_scoreboard(rows: List[Dict[str,Any]]):
     if row_on is None or row_off is None:
         row_on = rows[0]; row_off = rows[1]
 
+    hdr_title = "SCENARIO 02 - ADR ON vs ADR OFF (ns-3)"
+    if title_suffix:
+        hdr_title += f"  {title_suffix}"
     print("\n" + "="*120)
-    print("SCENARIO 02 - ADR ON vs ADR OFF (ns-3)")
+    print(hdr_title)
     print("="*120)
     print(f"{'Metric':<28} {'ADR ON':>18} {'ADR OFF':>18} {'Delta (ON-OFF)':>18}")
     print("-"*120)
@@ -420,7 +437,7 @@ def print_scoreboard(rows: List[Dict[str,Any]]):
 # =============================================================================
 # Glue
 # =============================================================================
-def analyze_files(files: List[Path], shell_script: Optional[Path]=None) -> None:
+def analyze_files(files: List[Path], shell_script: Optional[Path]=None, title_suffix: str = "") -> None:
     results: List[Dict[str,Any]] = []
     for p in files:
         overall, per_node = parse_ns3_results_csv(p)
@@ -435,7 +452,7 @@ def analyze_files(files: List[Path], shell_script: Optional[Path]=None) -> None:
         results.append(summary)
 
     print_context(results)
-    print_scoreboard(results)
+    print_scoreboard(results, title_suffix=title_suffix)
 
 def main():
     ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 02 (ADR vs Fixed SF12) CSV results")
@@ -444,22 +461,38 @@ def main():
                     help="Root folder that contains sub-scenarios (default: output/scenario-02-adr-comparison)")
     ap.add_argument("--shell-script", type=Path, default=None, 
                     help="Path to run-02.sh for additional init conditions (optional)")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
     args = ap.parse_args()
 
+    # 1) explicit paths win
     inputs = [Path(p) for p in args.paths]
-    files = collect_csvs(inputs) if inputs else discover_default_csvs(args.base_dir)
+    if inputs:
+        files = collect_csvs(inputs)
+        title_suffix = f"(paths: {len(files)} file(s))"
+    else:
+        # 2) resolve area-aware base dir
+        base_resolved, area_options = resolve_area_base(args.base_dir, args.area)
+        if area_options is not None:
+            print(f"No CSV files found under: {args.base_dir.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {args.base_dir.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
 
-    if not files:
-        print(f"No CSV files found. Looked under: {args.base_dir.resolve()}")
-        if inputs:
-            print("Also checked provided paths:")
-            for p in inputs: print(f"  - {p}")
-        sys.exit(2)
+        files = discover_default_csvs(base_resolved)
+        if not files:
+            print(f"No CSV files found under: {base_resolved.resolve()}", file=sys.stderr)
+            sys.exit(2)
+
+        title_suffix = f"(area: {normalize_area(args.area)})" if args.area else ""
 
     # Prefer user-provided shell script; else try near base dir; else near first CSV
     shell_path = args.shell_script or find_shell_script_near(args.base_dir) or find_shell_script_near(files[0])
-
-    analyze_files(files, shell_path)
+    analyze_files(files, shell_path, title_suffix=title_suffix)
 
 if __name__ == "__main__":
     main()

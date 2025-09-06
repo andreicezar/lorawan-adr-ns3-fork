@@ -22,9 +22,9 @@ echo "=== RUN SIMULATION SCRIPT ==="
 # bash scratch/scenario-03-sf-impact/run-03.sh
 # bash scratch/scenario-04-confirmed-messages/run-04.sh
 # bash scratch/scenario-05-traffic-patterns/run-05.sh
-bash scratch/scenario-06-collision-capture/run-06.sh
-bash scratch/scenario-07-propagation-models/run-07.sh
+# bash scratch/scenario-06-collision-capture/run-06.sh
+# bash scratch/scenario-07-propagation-models/run-07.sh
 # bash scratch/scenario-08-multi-gateway/run-08.sh
-# bash scratch/run-all.sh
+bash scratch/run-all.sh --all
 
 echo "=== ALL DONE ==="

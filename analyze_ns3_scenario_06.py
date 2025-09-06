@@ -118,6 +118,29 @@ def discover_default(base_dir: Path) -> List[Path]:
         return []
     return sorted(base_dir.rglob("*_results.csv"))
 
+# ---------- area helpers (like Scenario 08/07) ----------
+def normalize_area(area: Optional[str]) -> Optional[str]:
+    if not area:
+        return None
+    a = area.strip().lower().replace(" ", "")
+    m = re.match(r"^([1-5])(?:x\1)?km$", a)  # supports 1km or 1x1km → 1x1km
+    return f"{m.group(1)}x{m.group(1)}km" if m else a
+
+def resolve_area_base(base_dir: Path, area: Optional[str]) -> Tuple[Path, Optional[List[str]]]:
+    """
+    If area is provided, return base_dir_<area>.
+    If not, and base_dir doesn't exist but suffixed dirs do, return suggestions.
+    """
+    if area:
+        return base_dir.parent / f"{base_dir.name}_{normalize_area(area)}", None
+    if base_dir.exists():
+        return base_dir, None
+    parent = base_dir.parent
+    prefix = base_dir.name + "_"
+    options = sorted([d.name.split("_",1)[1] for d in parent.iterdir()
+                      if d.is_dir() and d.name.startswith(prefix)])
+    return base_dir, options if options else None
+
 # ---------- helpers to infer SF/interval/simtime ----------
 _SF_RX = re.compile(r"sf[_-]?(\d+)", re.I)
 def infer_sf_from_name(path: Path) -> Optional[int]:
@@ -132,7 +155,6 @@ def estimate_sim_minutes_from_df(df: pd.DataFrame, interval_s: Optional[int]) ->
         return None
     if "Sent" not in df.columns:
         return None
-    # avg sent per node * (interval_s / 60)
     try:
         avg_tx = float(df["Sent"].mean())
         return avg_tx * (interval_s / 60.0)
@@ -226,7 +248,6 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 06 — Collisio
         "Interf_Tot","UnderSens_Tot"
     )
 
-    # 14 placeholders to match 14 headers
     fmt = (
         f"{{:<{conf_w}}} "  # Configuration
         f"{{:>2}} "         # SF
@@ -278,22 +299,36 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 06 — Collisio
         ))
     print("=" * len(header_line))
 
-
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser(description="Scenario 06 — ns-3 Collision & Capture Analyzer")
-    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, use --base-dir.")
+    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok).")
     ap.add_argument("--base-dir", type=str, default="output/scenario-06-collision-capture",
-                    help="Folder to search for *_results.csv (default: ./output/scenario-06-collision-capture)")
+                    help="Base folder for *_results.csv. If --area is given, _<area> is appended.")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
     args = ap.parse_args()
 
+    # 1) explicit paths win
     if args.paths:
         csvs = discover_csvs(args.paths)
     else:
+        # 2) resolve area-aware base dir
         base = Path(args.base_dir)
-        csvs = discover_default(base)
+        base_resolved, area_options = resolve_area_base(base, args.area)
+        if area_options is not None:
+            print(f"No *_results.csv found under base-dir: {base.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {base.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
+
+        csvs = discover_default(base_resolved)
         if not csvs:
-            print(f"No *_results.csv found under base-dir: {base.resolve()}", file=sys.stderr)
+            print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
             sys.exit(2)
 
     rows: List[Dict[str, Any]] = []
@@ -303,7 +338,10 @@ def main():
         except Exception as e:
             print(f"[WARN] Failed to parse {p}: {e}", file=sys.stderr)
 
-    print_scoreboard(rows)
+    title = "SCENARIO 06 — Collision & Capture (ns-3)"
+    if args.area:
+        title += f"  (area: {normalize_area(args.area)})"
+    print_scoreboard(rows, title=title)
 
 if __name__ == "__main__":
     main()

@@ -74,7 +74,7 @@ void OnPacketSent(Ptr<const Packet> packet)
         g_confirmedPacketsSent++;
     }
     
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet) 
@@ -109,14 +109,14 @@ void OnGatewayReceive(Ptr<const Packet> packet)
                 // This FCnt was seen before - it's a retransmission
                 g_retransmissionsPerNode[nodeId]++;
                 g_totalRetransmissions++;
-                NS_LOG_INFO("Retransmission detected from Node " << nodeId << " FCnt=" << fcnt);
+                // NS_LOG_INFO("Retransmission detected from Node " << nodeId << " FCnt=" << fcnt);
             } else {
                 // First time seeing this FCnt
                 g_frameCountersPerNode[nodeId].insert(fcnt);
             }
             
             g_lastFrameCountPerNode[nodeId] = fcnt;
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
         }
     }
 }

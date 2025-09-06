@@ -79,7 +79,7 @@ void OnPacketSent(Ptr<const Packet> packet) {
     uint32_t nodeId = Simulator::GetContext();
     g_sentPacketsPerNode[nodeId]++;
     g_totalSent++;
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet)
@@ -101,7 +101,7 @@ void OnGatewayReceive(Ptr<const Packet> packet)
             uint32_t nodeId = it->second;
             g_receivedPacketsPerNode[nodeId]++;
             g_totalReceived++;
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
         }
     }
 }
@@ -115,19 +115,19 @@ void OnDataRateChange(uint8_t oldDr, uint8_t newDr) {
     g_adrHistory[nodeId].push_back(std::make_pair(time, newDr));
     g_totalAdrResponses++;
     
-    NS_LOG_INFO("Node " << nodeId << " DR change: " << (int)oldDr << " -> " << (int)newDr 
-                << " (SF" << (12-oldDr) << " -> SF" << (12-newDr) << ") at " << time << "s");
+    // NS_LOG_INFO("Node " << nodeId << " DR change: " << (int)oldDr << " -> " << (int)newDr 
+    //             << " (SF" << (12-oldDr) << " -> SF" << (12-newDr) << ") at " << time << "s");
     
-    std::cout << "ADR: Node " << nodeId << " changed from SF" << (12-oldDr) 
-              << " to SF" << (12-newDr) << " at " << time << "s" << std::endl;
+    // std::cout << "ADR: Node " << nodeId << " changed from SF" << (12-oldDr) 
+    //           << " to SF" << (12-newDr) << " at " << time << "s" << std::endl;
 }
 
 void OnTxPowerChange(double oldTxPower, double newTxPower) {
     uint32_t nodeId = Simulator::GetContext();
     double time = Simulator::Now().GetSeconds();
     
-    NS_LOG_INFO("Node " << nodeId << " TX Power change: " << oldTxPower << " -> " << newTxPower 
-                << " dBm at " << time << "s");
+    // NS_LOG_INFO("Node " << nodeId << " TX Power change: " << oldTxPower << " -> " << newTxPower 
+    //             << " dBm at " << time << "s");
                 
     std::cout << "ADR: Node " << nodeId << " power changed from " << oldTxPower 
               << " to " << newTxPower << " dBm at " << time << "s" << std::endl;
@@ -213,14 +213,14 @@ void InitializeDeviceParameters(NodeContainer endDevices) {
         if (g_initSF) {
             uint8_t targetDR = 2;  // DR2 = SF10
             mac->SetDataRate(targetDR);
-            NS_LOG_DEBUG("Node " << nodeId << " SF initialized to DR" << (int)targetDR);
+            // NS_LOG_DEBUG("Node " << nodeId << " SF initialized to DR" << (int)targetDR);
         }
         
         // Initialize TP if requested
         if (g_initTP) {
             double targetTP = 14.0;  // 14 dBm default
             mac->SetTransmissionPowerDbm(targetTP);
-            NS_LOG_DEBUG("Node " << nodeId << " TX Power initialized to " << targetTP << " dBm");
+            // NS_LOG_DEBUG("Node " << nodeId << " TX Power initialized to " << targetTP << " dBm");
         }
         
         // REMOVED INVALID CALLS:
@@ -442,11 +442,11 @@ int main(int argc, char* argv[]) {
     LogComponentEnable("Scenario01Baseline", LOG_LEVEL_INFO);
     if (enableADR) {
         LogComponentEnable("AdrComponent", LOG_LEVEL_INFO);
-        LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_INFO);
+        // LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_INFO);
         LogComponentEnable("NetworkServer", LOG_LEVEL_INFO);
         std::cout << "🔍 ADR debugging enabled" << std::endl;
     }
-    LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_DEBUG);
+    // LogComponentEnable("EndDeviceLorawanMac", LOG_LEVEL_DEBUG);
 
     // Create node containers
     NodeContainer endDevices, gateways;

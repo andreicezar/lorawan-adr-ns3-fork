@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
@@ -34,7 +33,6 @@ def discover_default_csvs(base_dir: Path) -> List[Path]:
     csvs: List[Path] = []
     for pat in ("*_results.csv", "*-results.csv", "result_results.csv"):
         csvs.extend(sorted(base_dir.rglob(pat)))
-    # de-dup while preserving order
     seen = set(); uniq: List[Path] = []
     for f in csvs:
         if f.exists() and f not in seen:
@@ -108,13 +106,11 @@ def print_init_snapshot(init: Dict[str, Any], source: str):
 # ------------------------------- CSV parsing ------------------------------------------
 def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """
-    Parses three sections if present:
+    Parses:
       OVERALL_STATS
       PER_NODE_STATS
-      INTERFERENCE_STATS (optional, produced by the new exporter)
-    Returns a unified 'overall' dict with normalized keys:
-      Collisions_Total, UnderSensitivity_Total, CollisionRate_Percent, UnderSensitivityRate_Percent,
-      RxOk_Total, Lost_Interference_Total, Lost_UnderSensitivity_Total, plus the usual totals.
+      INTERFERENCE_STATS (optional)
+    Normalizes totals & rates for collisions/undersensitivity as in newer exporters.
     """
     txt = path.read_text(encoding="utf-8", errors="ignore").splitlines()
 
@@ -133,7 +129,7 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str, Any], List[Dict[str, An
 
     overall: Dict[str, Any] = {}
 
-    # ---- OVERALL_STATS block ----
+    # OVERALL_STATS
     i = idx_over + 1
     end_over = idx_node if idx_node is not None else len(txt)
     while i < len(txt) and i < end_over:
@@ -142,24 +138,18 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str, Any], List[Dict[str, An
             continue
         k, v = line.split(",", 1)
         k = k.strip(); v = v.strip()
-        # ints
         if k in ("SpreadingFactor", "TotalSent", "TotalReceived",
                  "TotalCollisions", "TotalUnderSensitivity", "TotalInterference"):
-            overall[k] = _to_int(v)
-            continue
-        # floats
+            overall[k] = _to_int(v); continue
         if k in ("PDR_Percent", "DropRate_Percent", "TotalAirTime_ms",
                  "TheoreticalAirTimePerPacket_ms", "ChannelUtilization_Percent",
                  "AirtimeScale_vs_SF7", "CollisionRate_Percent",
                  "UnderSensitivityRate_Percent", "InterferenceRate_Percent"):
-            overall[k] = _to_float(v)
-            continue
-        # else keep raw/fallback float
+            overall[k] = _to_float(v); continue
         fv = _to_float(v); overall[k] = fv if fv is not None else v
 
-    # ---- PER_NODE_STATS block ----
+    # PER_NODE_STATS
     header_line_idx = idx_node + 1
-    # Find next section boundary (INTERFERENCE_STATS or EOF)
     next_boundary = idx_intr if (idx_intr is not None and idx_intr > header_line_idx) else len(txt)
     csv_text = "\n".join(txt[header_line_idx:next_boundary]).strip()
 
@@ -180,14 +170,12 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str, Any], List[Dict[str, An
                     row[kk] = vv
             rows.append(row)
 
-    # ---- INTERFERENCE_STATS block (optional) ----
+    # INTERFERENCE_STATS (optional)
     if idx_intr is not None:
         j = idx_intr + 1
         while j < len(txt):
             line = txt[j].strip(); j += 1
-            if not line:
-                continue
-            if "," not in line:
+            if not line or "," not in line:
                 continue
             k, v = [s.strip() for s in line.split(",", 1)]
             if k in ("RxOk_Total", "Lost_Interference_Total", "Lost_UnderSensitivity_Total"):
@@ -196,27 +184,24 @@ def parse_ns3_results_csv(path: Path) -> Tuple[Dict[str, Any], List[Dict[str, An
                 fv = _to_float(v)
                 overall[k] = fv if fv is not None else v
 
-    # ---- Normalize aliases / compute missing rates ----
-    # Prefer explicit OVERALL counters when present; else fall back to INTERFERENCE_STATS
-    collisions_total = (overall.get("TotalCollisions") 
-                        if overall.get("TotalCollisions") is not None 
+    # Normalize aliases / compute missing rates
+    collisions_total = (overall.get("TotalCollisions")
+                        if overall.get("TotalCollisions") is not None
                         else overall.get("Lost_Interference_Total"))
     undersens_total = (overall.get("TotalUnderSensitivity")
                        if overall.get("TotalUnderSensitivity") is not None
                        else overall.get("Lost_UnderSensitivity_Total"))
-    # Back-compat: some old exports wrote "TotalInterference" (misnamed)
     if collisions_total is None and overall.get("TotalInterference") is not None:
         collisions_total = overall.get("TotalInterference")
 
     overall["Collisions_Total"] = collisions_total
     overall["UnderSensitivity_Total"] = undersens_total
 
-    # Rates: use provided; else compute from totals
     denom = overall.get("TotalSent") or 0
     if overall.get("CollisionRate_Percent") is None and collisions_total is not None and denom > 0:
-        overall["CollisionRate_Percent"] = 100.0 * float(collisions_total)/float(denom)
+        overall["CollisionRate_Percent"] = 100.0 * float(collisions_total) / float(denom)
     if overall.get("UnderSensitivityRate_Percent") is None and undersens_total is not None and denom > 0:
-        overall["UnderSensitivityRate_Percent"] = 100.0 * float(undersens_total)/float(denom)
+        overall["UnderSensitivityRate_Percent"] = 100.0 * float(undersens_total) / float(denom)
 
     return overall, rows
 
@@ -231,24 +216,21 @@ def summarize_one(csv_path: Path) -> Dict[str, Any]:
     res["Utilization (%)"] = overall.get("ChannelUtilization_Percent")
     res["SF"] = overall.get("SpreadingFactor")
 
-    # Collisions / Under-sensitivity (normalized keys)
     res["Collisions"] = overall.get("Collisions_Total", 0)
     res["UnderSens"]  = overall.get("UnderSensitivity_Total", 0)
-    res["Collision Rate (%)"]     = overall.get("CollisionRate_Percent", 0.0)
-    res["UnderSens Rate (%)"]     = overall.get("UnderSensitivityRate_Percent", overall.get("InterferenceRate_Percent", 0.0))
+    res["Collision Rate (%)"] = overall.get("CollisionRate_Percent", 0.0)
+    res["UnderSens Rate (%)"] = overall.get("UnderSensitivityRate_Percent",
+                                            overall.get("InterferenceRate_Percent", 0.0))
 
     def _avg(col: str) -> Optional[float]:
         vals = [r.get(col) for r in per_node if isinstance(r.get(col), (int,float))]
         return (sum(vals)/len(vals)) if vals else None
 
     res["Avg RSSI (dBm)"] = _avg("AvgRSSI_dBm")
-    res["Avg SNIR (dB)"] = _avg("AvgSNR_dB")
-    res["Avg TP (dBm)"] = 14.0
-
-    # Also expose node-level sums for sanity
-    res["ΣNode Collisions"] = sum([r.get("Collisions") or 0 for r in per_node]) if per_node else None
+    res["Avg SNIR (dB)"]  = _avg("AvgSNR_dB")
+    res["Avg TP (dBm)"]   = 14.0
+    res["ΣNode Collisions"]   = sum([r.get("Collisions") or 0 for r in per_node]) if per_node else None
     res["ΣNode Interference"] = sum([r.get("Interference") or 0 for r in per_node]) if per_node else None
-
     return res
 
 def fmt_cell(v, dec):
@@ -264,7 +246,7 @@ def fmt_cell(v, dec):
         return f"{v:.{dec}f}"
     return str(v)
 
-def print_sf_table(rows: List[Dict[str, Any]]) -> None:
+def print_sf_table(rows: List[Dict[str, Any]], title_suffix: str = "") -> None:
     columns = [
         ("Config",        "Configuration",    None, 12),
         ("Sent",          "Sent",             None, 6),
@@ -280,11 +262,12 @@ def print_sf_table(rows: List[Dict[str, Any]]) -> None:
         ("SF",            "SF",               None, 4),
         ("TP(dBm)",       "Avg TP (dBm)",     1,    7),
     ]
-
     rows_sorted = sorted(rows, key=lambda r: r.get("SF", 99))
-
     print("\n" + "="*130)
-    print("SCENARIO 03 — Spreading Factor Impact (ns-3) — SCOREBOARD")
+    title = "SCENARIO 03 — Spreading Factor Impact (ns-3) — SCOREBOARD"
+    if title_suffix:
+        title += f" {title_suffix}"
+    print(title)
     print("="*130)
 
     header_parts = []
@@ -299,22 +282,18 @@ def print_sf_table(rows: List[Dict[str, Any]]) -> None:
             val = fmt_cell(r.get(key), dec)
             row_parts.append(val.ljust(width) if hdr == "Config" else val.rjust(width))
         print(" ".join(row_parts))
-
     print("="*130)
 
 def print_init_conditions_per_scenario(rows: List[Dict[str, Any]], init: Dict[str, Any]) -> None:
     rows_sorted = sorted(rows, key=lambda r: r.get("SF", 99))
-
     for r in rows_sorted:
         sf = r.get("SF", "unknown")
-
         print(f"\n=== INITIALIZATION CONDITIONS: scenario-03-baseline-sf{sf} ===")
         print("-" * 65)
         def line(lbl, key, unit=""):
             val = init.get(key, "NOT FOUND")
             u = f" {unit}" if unit and val != 'NOT FOUND' else ""
             print(f"{lbl:<25}: {val}{u}")
-
         line("Number of Nodes", "numberOfNodes")
         line("Simulation Time", "simTime_min", "min")
         line("Send Interval", "sendInterval_s", "s")
@@ -326,11 +305,9 @@ def print_init_conditions_per_scenario(rows: List[Dict[str, Any]], init: Dict[st
         print(f"{'Coding Rate':<25}: 4")
         print(f"{'Max TX Duration':<25}: 4.0 s")
         print(f"{'Path Loss Sigma':<25}: 4.0 dB")
-
         if init.get("simTime_s") and init.get("sendInterval_s") and init["sendInterval_s"] > 0:
             expected = int(init["simTime_s"] / init["sendInterval_s"])
             print(f"{'Expected pkts/device':<25}: {expected}")
-
         print("=" * 65)
 
 def print_per_node_global_avgs(files: list[Path]) -> None:
@@ -348,7 +325,30 @@ def print_per_node_global_avgs(files: list[Path]) -> None:
             print(f"- {lab:<16} AvgRSSI_dBm={a(avg_rssi)}  AvgSNIR_dB={a(avg_snir)}")
         except Exception as e:
             print(f"- {f.name}: parse error: {e}")
-            
+
+# ------------------------------- area helpers ------------------------------------------
+def normalize_area(area: Optional[str]) -> Optional[str]:
+    """Accepts '1x1km' or compact '1km'..'5km' and normalizes to 'NxNkm'."""
+    if not area: return None
+    a = area.strip().lower().replace(" ", "")
+    m = re.match(r"^([1-5])(?:x\1)?km$", a)  # 1km or 1x1km → 1x1km
+    return f"{m.group(1)}x{m.group(1)}km" if m else a
+
+def resolve_area_base(base_dir: Path, area: Optional[str]) -> tuple[Path, Optional[List[str]]]:
+    """
+    If area is provided, return base_dir_<area>.
+    If not and base_dir doesn't exist but suffixed dirs do, return suggestions.
+    """
+    if area:
+        return base_dir.parent / f"{base_dir.name}_{normalize_area(area)}", None
+    if base_dir.exists():
+        return base_dir, None
+    parent = base_dir.parent
+    prefix = base_dir.name + "_"
+    options = sorted([d.name.split("_",1)[1] for d in parent.iterdir()
+                      if d.is_dir() and d.name.startswith(prefix)])
+    return base_dir, options if options else None
+
 # ------------------------------- main -----------------------------------------------
 def main():
     ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 03 (SF Impact) CSV results")
@@ -357,13 +357,31 @@ def main():
                     help=f"Root folder containing sub-scenarios (default: {DEFAULT_BASE_DIR})")
     ap.add_argument("--shell-script", type=str, default=str(DEFAULT_SHELL),
                     help=f"Path to run-03.sh (default: {DEFAULT_SHELL})")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
     args = ap.parse_args()
 
     base_dir = Path(wsl_unc_to_linux(args.base_dir))
     shell_arg = Path(wsl_unc_to_linux(args.shell_script)) if args.shell_script else None
 
+    # 1) explicit paths win
     inputs = [Path(wsl_unc_to_linux(p)) for p in args.paths] if args.paths else []
-    files = collect_csvs(inputs) if inputs else discover_default_csvs(base_dir)
+    if inputs:
+        files = collect_csvs(inputs)
+    else:
+        # 2) resolve area-aware base dir
+        base_resolved, area_options = resolve_area_base(base_dir, args.area)
+        if area_options is not None:
+            print(f"No CSV files found under: {base_dir.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {base_dir.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
+        files = discover_default_csvs(base_resolved)
+
     if not files:
         print(f"No CSV files found. Looked under: {base_dir.resolve()}")
         if inputs:
@@ -371,6 +389,7 @@ def main():
             for p in inputs: print(f"  - {p}")
         sys.exit(2)
 
+    # init
     try:
         overall0, per_node0 = parse_ns3_results_csv(files[0])
     except Exception as e:
@@ -393,12 +412,13 @@ def main():
     if not rows:
         print("No results parsed.", file=sys.stderr); sys.exit(3)
 
+    title_suffix = ""
+    if args.area:
+        title_suffix = f"(area: {normalize_area(args.area)})"
+
     print_init_conditions_per_scenario(rows, init)
-    # Show global per-node averages explicitly
     print_per_node_global_avgs(files)
-    print_sf_table(rows)
+    print_sf_table(rows, title_suffix=title_suffix)
 
 if __name__ == "__main__":
     main()
-
-

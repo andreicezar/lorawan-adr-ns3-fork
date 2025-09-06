@@ -74,13 +74,13 @@ void OnPacketSent(Ptr<const Packet> packet) {
     }
     
     // DEBUG: Show timing progress every 1000 packets
-    if (g_totalSent % 1000 == 0) {
-        double currentTime = Simulator::Now().GetSeconds();
-        std::cout << "DEBUG: Packet " << g_totalSent << " sent at " << currentTime 
-                  << "s (" << (currentTime/60.0) << " min)" << std::endl;
-    }
+    // if (g_totalSent % 1000 == 0) {
+    //     double currentTime = Simulator::Now().GetSeconds();
+        // std::cout << "DEBUG: Packet " << g_totalSent << " sent at " << currentTime 
+        //           << "s (" << (currentTime/60.0) << " min)" << std::endl;
+    // }
     
-    NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
+    // NS_LOG_DEBUG("Node " << nodeId << " sent packet #" << g_sentPacketsPerNode[nodeId]);
 }
 
 void OnGatewayReceive(Ptr<const Packet> packet)
@@ -99,9 +99,9 @@ void OnGatewayReceive(Ptr<const Packet> packet)
         static int adrDebugCount = 0;
         if (adrDebugCount < 10) {
             if (frameHeader.GetAdr()) {
-                std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit SET ✓" << std::endl;
+                // std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit SET ✓" << std::endl;
             } else {
-                std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit NOT SET ✗" << std::endl;
+                // std::cout << "DEBUG: Packet " << adrDebugCount << " has ADR bit NOT SET ✗" << std::endl;
             }
             adrDebugCount++;
         }
@@ -114,7 +114,7 @@ void OnGatewayReceive(Ptr<const Packet> packet)
             uint32_t nodeId = it->second;
             g_receivedPacketsPerNode[nodeId]++;
             g_totalReceived++;
-            NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
+            // NS_LOG_DEBUG("Gateway received packet from Node " << nodeId);
         }
     }
 }
@@ -131,9 +131,9 @@ void OnDataRateChange(uint8_t oldDr, uint8_t newDr) {
     double currentTime = Simulator::Now().GetSeconds();
     g_sfTimeSeriesPerNode[nodeId].push_back({currentTime, newSf});
     
-    NS_LOG_INFO("Node " << nodeId << " ADR change - DR: " << (int)oldDr 
-               << " -> " << (int)newDr << " (SF: " << (int)newSf << ") at " 
-               << std::fixed << std::setprecision(1) << currentTime << "s");
+    // NS_LOG_INFO("Node " << nodeId << " ADR change - DR: " << (int)oldDr 
+    //            << " -> " << (int)newDr << " (SF: " << (int)newSf << ") at " 
+    //            << std::fixed << std::setprecision(1) << currentTime << "s");
 }
 
 void OnTxPowerChange(double oldTp, double newTp) {
@@ -143,8 +143,8 @@ void OnTxPowerChange(double oldTp, double newTp) {
     double currentTime = Simulator::Now().GetSeconds();
     g_tpTimeSeriesPerNode[nodeId].push_back({currentTime, newTp});
     
-    NS_LOG_INFO("Node " << nodeId << " TP change: " << oldTp << " -> " << newTp 
-               << " dBm at " << std::fixed << std::setprecision(1) << currentTime << "s");
+    // NS_LOG_INFO("Node " << nodeId << " TP change: " << oldTp << " -> " << newTp 
+    //            << " dBm at " << std::fixed << std::setprecision(1) << currentTime << "s");
 }
 
 // ==============================================================================
@@ -320,7 +320,7 @@ void EnableAdrRequestsOnDevices(NodeContainer endDevices, bool adrEnabled) {
                 BooleanValue adrValue;
                 mac->GetAttribute("ADR", adrValue);
                 if (adrValue.Get()) {
-                    NS_LOG_DEBUG("Device " << node->GetId() << " ADR enabled successfully");
+                    // NS_LOG_DEBUG("Device " << node->GetId() << " ADR enabled successfully");
                 } else {
                     std::cout << "❌ FAILED to enable ADR on device " << node->GetId() << std::endl;
                 }

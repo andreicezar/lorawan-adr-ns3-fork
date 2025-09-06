@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import argparse, csv, io, sys, re, math
-import statistics as stats
 import pandas as pd
 
 # ---------- small numeric helpers ----------
@@ -35,7 +34,6 @@ def parse_csv07(path: Path):
                 return i
         return None
 
-    # locate sections
     i_over = find("OVERALL_STATS")
     i_node = find("PER_NODE_STATS")
     if i_over is None or i_node is None:
@@ -43,7 +41,7 @@ def parse_csv07(path: Path):
 
     def read_kv(start: int, end: int) -> Dict[str, Any]:
         out: Dict[str, Any] = {}
-        for i in range(start+1, end):
+        for i in range(start+1, min(end, len(lines))):
             s = lines[i].strip()
             if not s or "," not in s:
                 continue
@@ -52,10 +50,8 @@ def parse_csv07(path: Path):
             out[k] = fv if fv is not None else v
         return out
 
-    # parse sections
     overall = read_kv(i_over, i_node)
 
-    # PER_NODE table
     node_text = "\n".join(lines[i_node+1:]).strip()
     per_node: List[Dict[str, Any]] = []
     if node_text:
@@ -77,7 +73,7 @@ def parse_csv07(path: Path):
             })
     return overall, per_node
 
-# ---------- file discovery ----------
+# ---------- discovery ----------
 def discover_csvs(inputs: List[str]) -> List[Path]:
     files: List[Path] = []
     for s in inputs:
@@ -102,82 +98,86 @@ def discover_default(base_dir: Path) -> List[Path]:
         return []
     return sorted(base_dir.rglob("*_results.csv"))
 
-# ---------- propagation model inference ----------
+# ---------- area helpers ----------
+def normalize_area(area: Optional[str]) -> Optional[str]:
+    if not area:
+        return None
+    a = area.strip().lower().replace(" ", "")
+    m = re.match(r"^([1-5])(?:x\1)?km$", a)  # supports 1km or 1x1km
+    return f"{m.group(1)}x{m.group(1)}km" if m else a
+
+def area_side_km(area: Optional[str]) -> Optional[float]:
+    """Return the side length in km from strings like '4x4km' or '4km'. None if unknown."""
+    if not area: return None
+    a = normalize_area(area)
+    m = re.match(r"^([1-5])x\1km$", a)
+    if m:
+        return float(m.group(1))
+    m = re.match(r"^([1-5])km$", a)
+    if m:
+        return float(m.group(1))
+    return None
+
+def resolve_area_base(base_dir: Path, area: Optional[str]) -> Tuple[Path, Optional[List[str]]]:
+    if area:
+        return base_dir.parent / f"{base_dir.name}_{normalize_area(area)}", None
+    if base_dir.exists():
+        return base_dir, None
+    parent = base_dir.parent
+    prefix = base_dir.name + "_"
+    options = sorted([d.name.split("_",1)[1] for d in parent.iterdir()
+                      if d.is_dir() and d.name.startswith(prefix)])
+    return base_dir, options if options else None
+
+# ---------- inference ----------
 def infer_propagation_model_from_path(path: Path) -> Tuple[str, Optional[float]]:
-    """Infer propagation model and path loss exponent from file path or name."""
     name = path.name.lower()
     parent = path.parent.name.lower()
-    
-    # Check for LogDistance with path loss exponent
     logdist_patterns = [
         (r"logdist[_-]?(\d+\.?\d*)", "LogDistance"),
         (r"log[_-]?distance[_-]?(\d+\.?\d*)", "LogDistance"),
         (r"pathloss[_-]?(\d+\.?\d*)", "LogDistance")
     ]
-    
     for pattern, model_type in logdist_patterns:
-        for text in [name, parent]:
+        for text in (name, parent):
             match = re.search(pattern, text)
             if match:
                 try:
-                    # Handle cases like "32" -> 3.2, "376" -> 3.76
                     exponent_str = match.group(1)
                     if "." not in exponent_str and len(exponent_str) >= 2:
-                        # Convert "32" -> "3.2", "376" -> "3.76"
                         exponent_str = exponent_str[0] + "." + exponent_str[1:]
                     exponent = float(exponent_str)
                     return model_type, exponent
                 except:
                     continue
-    
-    # Check for FreeSpace/Friis
-    freespace_patterns = ["freespace", "friis", "free_space"]
-    for pattern in freespace_patterns:
-        if pattern in name or pattern in parent:
+    for key in ("freespace", "friis", "free_space"):
+        if key in name or key in parent:
             return "FreeSpace", None
-    
-    # Default fallback
     return "Unknown", None
 
-# ---------- distance-based analysis ----------
+# ---------- distance-binned stats (optional) ----------
 def analyze_distance_performance(per_node: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Analyze performance vs distance for propagation modeling."""
     if not per_node:
         return {}
-    
     df = pd.DataFrame(per_node)
-    
-    # Filter nodes with valid data
     valid_nodes = df.dropna(subset=['Distance_m', 'PDR_Percent', 'AvgRSSI_dBm'])
-    
     if valid_nodes.empty:
         return {}
-    
-    # Distance bins for analysis
     distances = valid_nodes['Distance_m'].values
     min_dist, max_dist = distances.min(), distances.max()
-    
-    # Create distance bins
     n_bins = min(10, len(valid_nodes) // 3) if len(valid_nodes) >= 9 else 3
     bins = pd.cut(valid_nodes['Distance_m'], bins=n_bins, precision=0)
-    
     binned_stats = valid_nodes.groupby(bins, observed=True).agg({
         'PDR_Percent': ['mean', 'std', 'count'],
         'AvgRSSI_dBm': ['mean', 'std'],
         'AvgSNR_dB': ['mean', 'std'],
         'Distance_m': ['mean', 'min', 'max']
     }).round(2)
-    
-    # Practical range analysis
     successful_nodes = valid_nodes[valid_nodes['PDR_Percent'] > 0]
     failed_nodes = valid_nodes[valid_nodes['PDR_Percent'] == 0]
-    
     max_success_dist = successful_nodes['Distance_m'].max() if not successful_nodes.empty else 0
     min_fail_dist = failed_nodes['Distance_m'].min() if not failed_nodes.empty else float('inf')
-    
-    # RSSI vs distance correlation
     rssi_distance_corr = valid_nodes['AvgRSSI_dBm'].corr(valid_nodes['Distance_m'])
-    
     return {
         'distance_bins': binned_stats,
         'max_success_distance': max_success_dist,
@@ -188,52 +188,49 @@ def analyze_distance_performance(per_node: List[Dict[str, Any]]) -> Dict[str, An
     }
 
 # ---------- row builders & stats ----------
-def build_row(path: Path) -> Dict[str, Any]:
+def build_row(path: Path, side_km: Optional[float]) -> Dict[str, Any]:
+    """
+    side_km: deployment square side (e.g., 4 for 4x4km). If provided,
+             coverage thresholds beyond side_km are reported as NA.
+    """
     overall, per_node = parse_csv07(path)
-    
-    # Infer propagation model from path
+
+    # Infer model from path; override if CSV carries explicit model
     prop_model, path_loss_exp = infer_propagation_model_from_path(path)
-    
-    # Override with actual model from CSV if available
     csv_model = overall.get("PropagationModel")
     if csv_model:
         prop_model = str(csv_model)
-    
-    # Basic stats from overall section
+
     total_sent = _to_int(overall.get("TotalSent", 0))
     total_received = _to_int(overall.get("TotalReceived", 0))
     pdr = _to_float(overall.get("PDR_Percent", 0))
     max_success_dist = _to_float(overall.get("MaxSuccessfulDistance_m"))
     min_fail_dist = _to_float(overall.get("MinFailureDistance_m"))
-    overall_avg_rssi = _to_float(overall.get("OverallAvgRSSI_dBm"))
-    
-    # Node count and advanced analysis
+
     df = pd.DataFrame(per_node) if per_node else pd.DataFrame()
     nodes = int(df["NodeID"].nunique()) if "NodeID" in df.columns else 0
-    
-    # Distance and RSSI analysis
-    distance_analysis = analyze_distance_performance(per_node)
-    
-    # RSSI/SNR statistics for received packets
+
+    # Coverage thresholds (km)
+    thresholds_km = [1.0, 3.0, 5.0]
+    cov_vals: Dict[float, Optional[float]] = {t: None for t in thresholds_km}
+    if not df.empty and "Distance_m" in df.columns and "PDR_Percent" in df.columns:
+        for t in thresholds_km:
+            # If area is known and this threshold exceeds the deployment side, mark NA
+            if side_km is not None and t > side_km:
+                cov_vals[t] = None
+                continue
+            denom = len(df[df["Distance_m"] <= (t * 1000.0)])
+            if denom > 0:
+                num = len(df[(df["Distance_m"] <= (t * 1000.0)) & (df["PDR_Percent"] > 0)])
+                cov_vals[t] = 100.0 * num / denom
+            else:
+                cov_vals[t] = None
+
+    # Received-only averages
     received_nodes = df[df["Received"] > 0] if not df.empty else pd.DataFrame()
     avg_rssi_received = received_nodes["AvgRSSI_dBm"].mean() if not received_nodes.empty else None
     avg_snr_received = received_nodes["AvgSNR_dB"].mean() if not received_nodes.empty else None
-    rssi_std = received_nodes["AvgRSSI_dBm"].std() if not received_nodes.empty else None
-    snr_std = received_nodes["AvgSNR_dB"].std() if not received_nodes.empty else None
-    
-    # Coverage analysis
-    coverage_at_1km = len(df[(df["Distance_m"] <= 1000) & (df["PDR_Percent"] > 0)]) if not df.empty else 0
-    coverage_at_3km = len(df[(df["Distance_m"] <= 3000) & (df["PDR_Percent"] > 0)]) if not df.empty else 0
-    coverage_at_5km = len(df[(df["Distance_m"] <= 5000) & (df["PDR_Percent"] > 0)]) if not df.empty else 0
-    
-    total_at_1km = len(df[df["Distance_m"] <= 1000]) if not df.empty else 0
-    total_at_3km = len(df[df["Distance_m"] <= 3000]) if not df.empty else 0
-    total_at_5km = len(df[df["Distance_m"] <= 5000]) if not df.empty else 0
-    
-    coverage_pct_1km = (100.0 * coverage_at_1km / total_at_1km) if total_at_1km > 0 else None
-    coverage_pct_3km = (100.0 * coverage_at_3km / total_at_3km) if total_at_3km > 0 else None
-    coverage_pct_5km = (100.0 * coverage_at_5km / total_at_5km) if total_at_5km > 0 else None
-    
+
     return {
         "Configuration": path.parent.name or path.stem,
         "PropagationModel": prop_model,
@@ -246,30 +243,26 @@ def build_row(path: Path) -> Dict[str, Any]:
         "MinFailDist(m)": min_fail_dist,
         "AvgRSSI(dBm)": avg_rssi_received,
         "AvgSNR(dB)": avg_snr_received,
-        "RSSI_Std": rssi_std,
-        "SNR_Std": snr_std,
-        "Coverage@1km(%)": coverage_pct_1km,
-        "Coverage@3km(%)": coverage_pct_3km,
-        "Coverage@5km(%)": coverage_pct_5km,
+        "Coverage@1km(%)": cov_vals[1.0],
+        "Coverage@3km(%)": cov_vals[3.0],
+        "Coverage@5km(%)": cov_vals[5.0],
         "File": str(path),
     }
 
-# ---------- pretty printer (dynamic width) ----------
+# ---------- pretty printer ----------
 def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 07 – Propagation Model Testing (ns-3)"):
     if not rows:
         print("No rows to display.")
         return
 
     conf_w = max(20, min(32, max(len(r.get("Configuration","")) for r in rows)))
-
     hdr = (
-        "Configuration", "Model", "PathLoss", "Nodes", "Sent", "Received", 
-        "PDR(%)", "MaxSuccess(m)", "AvgRSSI(dBm)", "AvgSNR(dB)", 
+        "Configuration", "Model", "PathLoss", "Nodes", "Sent", "Received",
+        "PDR(%)", "MaxSuccess(m)", "AvgRSSI(dBm)", "AvgSNR(dB)",
         "Cov@1km(%)", "Cov@3km(%)", "Cov@5km(%)"
     )
-
     fmt = (
-        f"{{:<{conf_w}}} "   # Configuration  
+        f"{{:<{conf_w}}} "   # Configuration
         f"{{:<12}} "         # Model
         f"{{:>8}} "          # PathLoss
         f"{{:>5}} "          # Nodes
@@ -284,11 +277,8 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 07 – Propagat
         f"{{:>10}}"          # Cov@5km(%)
     )
 
-    def fnum(v, d=2):
-        return f"{v:.{d}f}" if isinstance(v, (int, float)) else "NA"
-
-    def fint(v):
-        return f"{int(v):d}" if isinstance(v, (int, float)) else "NA"
+    def fnum(v, d=2): return f"{v:.{d}f}" if isinstance(v, (int, float)) else "NA"
+    def fint(v):       return f"{int(v):d}" if isinstance(v, (int, float)) else "NA"
 
     def fmodel(model, exp):
         if exp is not None:
@@ -303,12 +293,10 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 07 – Propagat
     print(header_line)
     print(line)
 
-    # Sort by propagation model, then path loss exponent
     rows_sorted = sorted(rows, key=lambda r: (
         r.get("PropagationModel", ""), 
         r.get("PathLossExp") or 0
     ))
-    
     for r in rows_sorted:
         print(fmt.format(
             r.get("Configuration",""),
@@ -327,30 +315,21 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 07 – Propagat
         ))
     print("=" * len(header_line))
 
-# ---------- detailed analysis printer ----------
+# ---------- detailed analysis (unchanged) ----------
 def print_detailed_analysis(rows: List[Dict[str, Any]]):
-    """Print detailed propagation model comparison."""
-    if not rows:
-        return
-    
+    if not rows: return
     print("\n" + "=" * 80)
     print("DETAILED PROPAGATION MODEL ANALYSIS")
     print("=" * 80)
-    
-    # Group by model type
-    models = {}
+
+    models: Dict[str, List[Dict[str, Any]]] = {}
     for row in rows:
-        model = row.get("PropagationModel", "Unknown")
-        if model not in models:
-            models[model] = []
-        models[model].append(row)
-    
+        models.setdefault(row.get("PropagationModel","Unknown"), []).append(row)
+
     for model, model_rows in models.items():
         print(f"\n🔬 {model} Model:")
         print("-" * 40)
-        
         if model == "LogDistance":
-            # Sort by path loss exponent
             model_rows.sort(key=lambda r: r.get("PathLossExp", 0))
             for row in model_rows:
                 exp = row.get("PathLossExp")
@@ -364,11 +343,9 @@ def print_detailed_analysis(rows: List[Dict[str, Any]]):
                 max_dist = row.get("MaxSuccessDist(m)", 0)
                 avg_rssi = row.get("AvgRSSI(dBm)")
                 print(f"  PDR={pdr:6.2f}%, MaxRange={max_dist:4.0f}m, AvgRSSI={avg_rssi:6.2f}dBm")
-    
-    # Best performing model analysis
+
     best_pdr = max(rows, key=lambda r: r.get("PDR(%)", 0))
     best_range = max(rows, key=lambda r: r.get("MaxSuccessDist(m)", 0))
-    
     print(f"\n🏆 BEST PERFORMERS:")
     print(f"  Best PDR: {best_pdr.get('PropagationModel')} "
           f"({best_pdr.get('PathLossExp', 'N/A')}) = {best_pdr.get('PDR(%)', 0):.2f}%")
@@ -378,28 +355,48 @@ def print_detailed_analysis(rows: List[Dict[str, Any]]):
 # ---------- main ----------
 def main():
     ap = argparse.ArgumentParser(description="Scenario 07 – ns-3 Propagation Model Analyzer")
-    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, use --base-dir.")
+    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, use --base-dir/--area.")
     ap.add_argument("--base-dir", type=str, default="output/scenario-07-propagation-models",
-                    help="Folder to search for *_results.csv (default: ./output/scenario-07-propagation-models)")
+                    help="Base folder for *_results.csv (area suffix added if --area is given).")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
     args = ap.parse_args()
 
+    # 1) explicit files/folders win
     if args.paths:
         csvs = discover_csvs(args.paths)
+        side_km = area_side_km(None)  # unknown
     else:
+        # 2) resolve area-aware base dir
         base = Path(args.base_dir)
-        csvs = discover_default(base)
-        if not csvs:
-            print(f"No *_results.csv found under base-dir: {base.resolve()}", file=sys.stderr)
+        base_resolved, area_options = resolve_area_base(base, args.area)
+        if area_options is not None:
+            print(f"No *_results.csv found under base-dir: {base.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {base.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
             sys.exit(2)
+
+        csvs = discover_default(base_resolved)
+        if not csvs:
+            print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
+            sys.exit(2)
+        side_km = area_side_km(args.area)
 
     rows: List[Dict[str, Any]] = []
     for p in csvs:
         try:
-            rows.append(build_row(Path(p)))
+            rows.append(build_row(Path(p), side_km))
         except Exception as e:
             print(f"[WARN] Failed to parse {p}: {e}", file=sys.stderr)
 
-    print_scoreboard(rows)
+    title = "SCENARIO 07 – Propagation Model Testing (ns-3)"
+    if args.area:
+        title += f"  (area: {normalize_area(args.area)})"
+    print_scoreboard(rows, title=title)
     print_detailed_analysis(rows)
 
 if __name__ == "__main__":

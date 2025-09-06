@@ -111,7 +111,8 @@ PY_SCRIPTS=(
     "ns3_lorawan_parser.py" "run_diagnostics.py" "run_analysis.py"
     "analyze_comparison.py" "generate_omnet_baselines.py"
     "generate_positions.py" "scenario_plotter.py" "gen_omnet_scenarios.py"
-    "csv-to-omnet.py" "analyze_scenario_01.py" "analyze_scenario_02.py" 
+    "csv-to-omnet.py" 
+    "analyze_ns3_scenario_01.py" "analyze_ns3_scenario_02.py" 
     "analyze_ns3_scenario_03.py" "analyze_ns3_scenario_05.py"
     "analyze_ns3_scenario_06.py" "analyze_ns3_scenario_07.py"
     "analyze_ns3_scenario_08.py"
@@ -131,6 +132,24 @@ fi
 echo "Updating individual files …"
 if copy_single_file "$SRC/scenario_positions.csv" "$DST/scenario_positions.csv" "position data (CSV)"; then
     copied_files+=("scenario_positions.csv (node positions data)")
+fi
+if copy_single_file "$SRC/scenario_positions_1x1km.csv" "$DST/scenario_positions_1x1km.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions_1x1km.csv (node positions data)")
+fi
+if copy_single_file "$SRC/scenario_positions_2x2km.csv" "$DST/scenario_positions_2x2km.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions_2x2km.csv (node positions data)")
+fi
+if copy_single_file "$SRC/scenario_positions_3x3km.csv" "$DST/scenario_positions_3x3km.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions_3x3km.csv (node positions data)")
+fi
+if copy_single_file "$SRC/scenario_positions_4x4km.csv" "$DST/scenario_positions_4x4km.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions_4x4km.csv (node positions data)")
+fi
+if copy_single_file "$SRC/scenario_positions_5x5km.csv" "$DST/scenario_positions_5x5km.csv" "position data (CSV)"; then
+    copied_files+=("scenario_positions_5x5km.csv (node positions data)")
+fi
+if copy_single_file "$SRC/run_all_analyzers.sh" "$DST/run_all_analyzers.sh" "run_all_analyzers.sh"; then
+    copied_files+=("run_all_analyzers.sh (run helper)")
 fi
 if copy_single_file "$SCRIPT_SRC" "$DST/fastrun.sh" "fastrun.sh"; then
     copied_files+=("fastrun.sh (build/run helper)")
