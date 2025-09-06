@@ -58,7 +58,7 @@ static constexpr double kBwHz = 125000.0;
 static constexpr double kNoiseFigureDb = 6.0;
 static constexpr double kTxPowerDbm = 14.0;
 static constexpr double kFreqHz = 868e6; // for Friis
-
+double g_pathLossExponent = 3.76;
 // ============================================================================
 // CALLBACKS
 // ============================================================================
@@ -93,12 +93,12 @@ void OnGatewayReceive(Ptr<const Packet> packet)
 
     if (g_propagationModel == "LogDistance") {
         // ref=7.7 dB @1m, exponent=3.76 (same as standard channel)  — tune via cmd flag if needed
-        rssiDbm = lora::Rssi_dBm_fromDistance(kTxPowerDbm, d, 7.7, 3.76);
+        rssiDbm = lora::Rssi_dBm_fromDistance(kTxPowerDbm, d, 7.7, g_pathLossExponent);
     } else if (g_propagationModel == "FreeSpace") {
         rssiDbm = lora::Rssi_dBm_FreeSpace(kTxPowerDbm, kFreqHz, d);
     } else {
         // Fallback to log-distance if something odd slips through
-        rssiDbm = lora::Rssi_dBm_fromDistance(kTxPowerDbm, d, 7.7, 3.76);
+        rssiDbm = lora::Rssi_dBm_fromDistance(kTxPowerDbm, d, 7.7, g_pathLossExponent);
     }
 
     const double noiseDbm = lora::NoiseFloor_dBm(kBwHz, kNoiseFigureDb);
@@ -237,7 +237,7 @@ int main(int argc, char* argv[])
     cmd.Parse(argc, argv);
 
     g_propagationModel = propagationModel;
-
+    g_pathLossExponent = pathLossExponent;
     LogComponentEnable("Scenario07PropagationModels", LOG_LEVEL_INFO);
     Config::SetDefault("ns3::EndDeviceLorawanMac::ADR", BooleanValue(false)); // consistent testing
 

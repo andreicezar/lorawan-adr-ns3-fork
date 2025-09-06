@@ -116,13 +116,6 @@ run_all_scenarios() {
         echo "✅ All realistic equal-packet scenarios completed!"
         echo "📈 Results available in output/scenario-06-collision-capture/ directories"
         echo ""
-        echo "🎯 Each SF should now achieve ~120 packets per device"
-        echo "📊 Fair comparison achieved while respecting duty cycle limits"
-        echo ""
-        echo "🔍 Next steps:"
-        echo "   1. Compare capture effect strength across SFs"
-        echo "   2. Analyze collision patterns with equal packet counts"
-        echo "   3. Validate duty cycle compliance in real deployments"
     else
         echo "❌ Some scenarios failed: ${FAILED_CASES[*]}"
         echo "❌ Check the simulation output above for error details"

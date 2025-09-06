@@ -113,9 +113,9 @@ PY_SCRIPTS=(
     "generate_positions.py" "scenario_plotter.py" "gen_omnet_scenarios.py"
     "csv-to-omnet.py" "analyze_scenario_01.py" "analyze_scenario_02.py" 
     "analyze_ns3_scenario_03.py" "analyze_ns3_scenario_05.py"
-    "analyze_scenario_03.py" "analyze_scenario_04.py" 
-    "analyze_scenario_05.py" "analyze_scenario_06.py"
-    "analyze_scenario_07.py" "analyze_scenario_08.py")
+    "analyze_ns3_scenario_06.py" "analyze_ns3_scenario_07.py"
+    "analyze_ns3_scenario_08.py"
+)
 py_scripts_found=0
 for script in "${PY_SCRIPTS[@]}"; do
     # copy_single_file returns 0 on success
