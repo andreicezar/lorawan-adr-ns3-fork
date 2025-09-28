@@ -351,74 +351,47 @@ def resolve_area_base(base_dir: Path, area: Optional[str]) -> tuple[Path, Option
 
 # ------------------------------- main -----------------------------------------------
 def main():
-    ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 03 (SF Impact) CSV results")
-    ap.add_argument("paths", nargs="*", help="(optional) CSV files or directories containing '*_results.csv'")
-    ap.add_argument("--base-dir", type=str, default=str(DEFAULT_BASE_DIR),
-                    help=f"Root folder containing sub-scenarios (default: {DEFAULT_BASE_DIR})")
-    ap.add_argument("--shell-script", type=str, default=str(DEFAULT_SHELL),
-                    help=f"Path to run-03.sh (default: {DEFAULT_SHELL})")
-    ap.add_argument("--area", type=str, default=None,
-                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
-    args = ap.parse_args()
+    # SCOREBOARD-ONLY main: no init/context banners, no warnings.
+    import argparse, sys
+    from pathlib import Path
+
+    ap = argparse.ArgumentParser(add_help=False)  # stay quiet
+    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
+    ap.add_argument("--base-dir", type=str, default=str(DEFAULT_BASE_DIR), help=argparse.SUPPRESS)
+    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)
+    args, _ = ap.parse_known_args()
 
     base_dir = Path(wsl_unc_to_linux(args.base_dir))
-    shell_arg = Path(wsl_unc_to_linux(args.shell_script)) if args.shell_script else None
 
-    # 1) explicit paths win
+    # Collect CSV inputs silently
     inputs = [Path(wsl_unc_to_linux(p)) for p in args.paths] if args.paths else []
     if inputs:
         files = collect_csvs(inputs)
     else:
-        # 2) resolve area-aware base dir
         base_resolved, area_options = resolve_area_base(base_dir, args.area)
         if area_options is not None:
-            print(f"No CSV files found under: {base_dir.resolve()}")
-            if area_options:
-                print("Available area folders:")
-                for a in area_options:
-                    print(f"  - {base_dir.name}_{a}")
-                print("\nHint: pass --area <one of the above>, e.g.:")
-                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
-            sys.exit(2)
+            return  # nothing to print
         files = discover_default_csvs(base_resolved)
 
     if not files:
-        print(f"No CSV files found. Looked under: {base_dir.resolve()}")
-        if inputs:
-            print("Also checked provided paths:")
-            for p in inputs: print(f"  - {p}")
-        sys.exit(2)
+        return  # nothing to print
 
-    # init
-    try:
-        overall0, per_node0 = parse_ns3_results_csv(files[0])
-    except Exception as e:
-        overall0, per_node0 = {}, []
-        print(f"[WARN] Could not parse first CSV for init fallback: {e}", file=sys.stderr)
-
-    shell = shell_arg if (shell_arg and shell_arg.exists()) else None
-    init = extract_init_from_shell(shell)
-    if "numberOfNodes" not in init and per_node0:
-        init["numberOfNodes"] = len(per_node0)
-    print_init_snapshot(init, shell.name if shell else "CSV fallback")
-
+    # Build rows WITHOUT printing any init/context
     rows: List[Dict[str, Any]] = []
     for f in files:
         try:
             rows.append(summarize_one(f))
-        except Exception as e:
-            print(f"[WARN] Failed to parse {f}: {e}", file=sys.stderr)
+        except Exception:
+            # remain silent on failures to keep output strictly the scoreboard
+            pass
 
     if not rows:
-        print("No results parsed.", file=sys.stderr); sys.exit(3)
+        return  # nothing to print
 
-    title_suffix = ""
-    if args.area:
-        title_suffix = f"(area: {normalize_area(args.area)})"
-
-    print_init_conditions_per_scenario(rows, init)
-    print_per_node_global_avgs(files)
+    # >>> PRINT STRICTLY THE SCOREBOARD <<<
+    title_suffix = f"(area: {normalize_area(args.area)})" if args.area else ""
     print_sf_table(rows, title_suffix=title_suffix)
+
 
 if __name__ == "__main__":
     main()

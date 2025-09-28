@@ -167,82 +167,8 @@ def node_pdr_stats(per_node: List[Dict[str, Any]]) -> Tuple[Optional[float], Opt
 def count_low_pdr(per_node: List[Dict[str, Any]], thr: float) -> int:
     return sum(1 for r in per_node if isinstance(r.get("PDR_Percent"), (int,float)) and r["PDR_Percent"] < thr)
 
-# ----------------------- printing ------------------------------
-def print_table(rows: List[Dict[str, Any]]) -> None:
-    columns = [
-        ("Config",        "Config",            None, 18),
-        ("Int(s)",        "Interval (s)",      None,  6),
-        ("Sent",          "Sent",              None,  7),
-        ("Recv",          "Received",          None,  7),
-        ("Drop",          "Dropped",           None,  6),
-        ("PDR(%)",        "PDR (%)",             2,   7),
-        ("Busy(%)",       "Utilization (%)",     3,   9),
-        ("Avg Sends/Node","AvgTx",               2,  14),
-    ]
-
-    def _key(r):
-        iv = r.get("Interval (s)")
-        return iv if isinstance(iv, int) else 10**9
-    rows_sorted = sorted(rows, key=_key)
-
-    print("\n" + "="*100)
-    print("SCENARIO 05 — Traffic Pattern Variation (ns-3) — SCOREBOARD")
-    print("="*100)
-
-    header_parts = [
-        (hdr.ljust(width) if hdr == "Config" else hdr.rjust(width))
-        for hdr, _, _, width in columns
-    ]
-    print(" ".join(header_parts))
-    print("-" * 100)
-
-    for r in rows_sorted:
-        row_parts = []
-        for hdr, key, dec, width in columns:
-            val = r.get(key)
-            if val is None:
-                s = ""
-            elif isinstance(val, float):
-                if dec is not None:
-                    s = f"{val:.{dec}f}"
-                else:
-                    s = str(int(round(val))) if abs(val - round(val)) < 1e-9 else f"{val:.2f}"
-            else:
-                s = str(val)
-            row_parts.append(s.ljust(width) if hdr == "Config" else s.rjust(width))
-        print(" ".join(row_parts))
-
-    print("="*100)
-
-def print_summaries(paths: List[Path], pdr_threshold: float) -> None:
-    print("\nSIMPLE SUMMARIES (per CSV)")
-    print("---------------------------")
-    for p in paths:
-        overall, per_node = parse_csv(p)
-        row = summarize_row(p)
-        mn, md, mx = node_pdr_stats(per_node)
-        low = count_low_pdr(per_node, pdr_threshold)
-        nodes = row.get("Nodes")
-        util = row.get("Utilization (%)")
-        util_s = (f"{util:.3f}%" if isinstance(util, float) else "NA")
-        pdr_s  = (f"{row.get('PDR (%)'):.2f}%" if isinstance(row.get('PDR (%)'), float) else "NA")
-        avg_tx = (f"{row.get('AvgTx'):.2f}" if isinstance(row.get('AvgTx'), float) else "NA")
-        dro    = (str(row.get("Dropped")) if row.get("Dropped") is not None else "NA")
-        mn_s   = (f"{mn:.2f}%" if isinstance(mn, float) else "NA")
-        md_s   = (f"{md:.2f}%" if isinstance(md, float) else "NA")
-        mx_s   = (f"{mx:.2f}%" if isinstance(mx, float) else "NA")
-        low_s  = f"{low}" if isinstance(low, int) else "NA"
-        nodes_s= f"{nodes}" if nodes is not None else "NA"
-
-        print(
-            f"{p.parent.name or p.stem}: "
-            f"Busy {util_s}, PDR {pdr_s}, Dropped {dro}, "
-            f"Avg Sends/Node {avg_tx}, "
-            f"Low-PDR(<{pdr_threshold:.0f}%) nodes: {low_s}/{nodes_s}, "
-            f"PDR(min/med/max): {mn_s}/{md_s}/{mx_s}"
-        )
-
-def print_common_scoreboard(rows, title="SCENARIO 05 — Unified Scoreboard"):
+# ----------------------- printing (scoreboard only) ------------------------------
+def print_common_scoreboard(rows, title="SCENARIO 05 – Unified Scoreboard"):
     print("\n" + "="*130)
     print(title)
     print("="*130)
@@ -327,9 +253,9 @@ def read_ns3_table(path: Path):
     # Read only the per-node table
     return pd.read_csv(path, skiprows=start, engine="python")
 
-# ----------------------- main ---------------------------------
+# ----------------------- main (modified to print only scoreboard) ---------------------------------
 def main():
-    ap = argparse.ArgumentParser(description="Scenario 05 — Traffic Pattern Variation Analyzer (ns-3)")
+    ap = argparse.ArgumentParser(description="Scenario 05 – Traffic Pattern Variation Analyzer (ns-3)")
     ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, we'll use --base-dir/--area.")
     ap.add_argument("--base-dir", type=str, default="output/scenario-05-traffic-patterns",
                     help="Folder to search for *_results.csv when no paths are given (default: ./output/scenario-05-traffic-patterns)")
@@ -360,10 +286,10 @@ def main():
             print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
             sys.exit(2)
 
-    # keep your existing per-file summaries if you still want the old table
-    rows = [summarize_row(p) for p in csvs]
-    if rows:
-        print_table(rows)
+    # REMOVED: old table and summaries
+    # rows = [summarize_row(p) for p in csvs]
+    # if rows:
+    #     print_table(rows)
 
     # build the unified (apples-to-apples) scoreboard rows
     common_rows = []
@@ -382,8 +308,8 @@ def main():
         # Build the unified row (uses Sent/Received sums from the per-node table)
         common_rows.append(build_common_row_ns3(config_name, interval_seconds, df))
 
-    # print the unified scoreboard (with area in the title if provided)
-    title = "SCENARIO 05 — Unified Scoreboard"
+    # ONLY: print the unified scoreboard (with area in the title if provided)
+    title = "SCENARIO 05 – Unified Scoreboard"
     if args.area:
         title += f"  (area: {normalize_area(args.area)})"
     print_common_scoreboard(common_rows, title=title)
