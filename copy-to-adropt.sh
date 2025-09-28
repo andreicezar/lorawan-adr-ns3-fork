@@ -67,22 +67,18 @@ if [[ -d "$SRC/src/lorawan" ]]; then
   copy_update "$SRC/src/lorawan" "$DST/lorawan"
   copied_dirs+=("lorawan/ (source code)")
 fi
-
 if [[ -d "$SRC/scratch" ]]; then
   copy_update "$SRC/scratch" "$DST/scratch"
   copied_dirs+=("scratch/ (scenarios and scripts)")
 fi
-
 if [[ -d "$SRC/plots" ]]; then
   copy_update "$SRC/plots" "$DST/plots"
   copied_dirs+=("plots/ (network topology visualizations)")
 fi
-
 if [[ -d "$SRC/generated-omnet-scenarios" ]]; then
   copy_update "$SRC/generated-omnet-scenarios" "$DST/generated-omnet-scenarios"
   copied_dirs+=("generated-omnet-scenarios/")
 fi
-
 if [[ -d "$SRC/omnet_positions" ]]; then
   copy_update "$SRC/omnet_positions" "$DST/omnet_positions"
   copied_dirs+=("omnet_positions/")

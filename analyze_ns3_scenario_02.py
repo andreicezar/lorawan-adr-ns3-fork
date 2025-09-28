@@ -455,71 +455,44 @@ def analyze_files(files: List[Path], shell_script: Optional[Path]=None, title_su
     print_scoreboard(results, title_suffix=title_suffix)
 
 def main():
-    # SCOREBOARD-ONLY main: no context/init banners, no warnings.
-    import argparse, sys, io, contextlib
-    from pathlib import Path
+    ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 02 (ADR vs Fixed SF12) CSV results")
+    ap.add_argument("paths", nargs="*", help="(optional) CSV files or directories containing '*_results.csv'")
+    ap.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR,
+                    help="Root folder that contains sub-scenarios (default: output/scenario-02-adr-comparison)")
+    ap.add_argument("--shell-script", type=Path, default=None, 
+                    help="Path to run-02.sh for additional init conditions (optional)")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
+    args = ap.parse_args()
 
-    ap = argparse.ArgumentParser(add_help=False)  # quiet
-    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
-    ap.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR, help=argparse.SUPPRESS)
-    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)  # e.g., 1x1km or 1km..5km
-    ap.add_argument("--shell-script", type=Path, default=None, help=argparse.SUPPRESS)
-    args, _ = ap.parse_known_args()
-
-    # Collect CSV inputs silently
-    inputs = [Path(p) for p in args.paths] if args.paths else []
+    # 1) explicit paths win
+    inputs = [Path(p) for p in args.paths]
     if inputs:
         files = collect_csvs(inputs)
+        title_suffix = f"(paths: {len(files)} file(s))"
     else:
+        # 2) resolve area-aware base dir
         base_resolved, area_options = resolve_area_base(args.base_dir, args.area)
         if area_options is not None:
-            return  # stay silent if nothing found / suggest options normally, but we suppress everything
+            print(f"No CSV files found under: {args.base_dir.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {args.base_dir.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
+
         files = discover_default_csvs(base_resolved)
+        if not files:
+            print(f"No CSV files found under: {base_resolved.resolve()}", file=sys.stderr)
+            sys.exit(2)
 
-    if not files:
-        return  # nothing to print
+        title_suffix = f"(area: {normalize_area(args.area)})" if args.area else ""
 
-    # Prefer provided shell script; else try near base dir; else near first CSV
+    # Prefer user-provided shell script; else try near base dir; else near first CSV
     shell_path = args.shell_script or find_shell_script_near(args.base_dir) or find_shell_script_near(files[0])
-
-    # Helper: silence any prints from summarize/parse functions
-    @contextlib.contextmanager
-    def _silence_stdio():
-        old_out, old_err = sys.stdout, sys.stderr
-        try:
-            sys.stdout = io.StringIO()
-            sys.stderr = io.StringIO()
-            yield
-        finally:
-            sys.stdout = old_out
-            sys.stderr = old_err
-
-    # Build summaries WITHOUT emitting anything except the final scoreboard
-    results = []
-    for p in files:
-        try:
-            with _silence_stdio():
-                overall, per_node = parse_ns3_results_csv(p)
-                summary = summarize(overall, per_node, p, shell_path)
-            # Normalize configuration label like the original code
-            label = p.stem
-            if "adr" in label.lower() and "enabled" in label.lower():
-                summary["Configuration"] = "scenario-02-adr-enabled"
-            elif "fixed" in label.lower() and "sf12" in label.lower():
-                summary["Configuration"] = "scenario-02-fixed-sf12"
-            else:
-                summary["Configuration"] = label
-            results.append(summary)
-        except Exception:
-            # remain silent on failures
-            pass
-
-    if not results:
-        return
-
-    # >>> PRINT STRICTLY THE SCOREBOARD <<<
-    print_scoreboard(results)
-
+    analyze_files(files, shell_path, title_suffix=title_suffix)
 
 if __name__ == "__main__":
     main()

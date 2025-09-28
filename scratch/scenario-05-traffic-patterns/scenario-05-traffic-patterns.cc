@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
     bool useFilePositions = true;
 
     CommandLine cmd(__FILE__);
-    cmd.AddValue("packetInterval", "Packet interval in seconds (e.g., 60, 300, 600, 800, 1000, 1200)", packetInterval);
+    cmd.AddValue("packetInterval", "Packet interval in seconds (600, 300, 60)", packetInterval);
     cmd.AddValue("simulationTime", "Simulation time in minutes", simulationTime);
     cmd.AddValue("outputPrefix", "Output file prefix", outputPrefix);
     cmd.AddValue("nDevices", "Number of devices", nDevices);

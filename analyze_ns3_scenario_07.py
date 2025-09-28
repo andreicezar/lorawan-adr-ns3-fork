@@ -354,51 +354,50 @@ def print_detailed_analysis(rows: List[Dict[str, Any]]):
 
 # ---------- main ----------
 def main():
-    # SCOREBOARD-ONLY main: no context/init banners, no warnings.
-    import argparse
-    from pathlib import Path
+    ap = argparse.ArgumentParser(description="Scenario 07 – ns-3 Propagation Model Analyzer")
+    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, use --base-dir/--area.")
+    ap.add_argument("--base-dir", type=str, default="output/scenario-07-propagation-models",
+                    help="Base folder for *_results.csv (area suffix added if --area is given).")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
+    args = ap.parse_args()
 
-    ap = argparse.ArgumentParser(add_help=False)  # stay quiet
-    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
-    ap.add_argument("--base-dir", type=str, default="output/scenario-07-propagation-models", help=argparse.SUPPRESS)
-    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)  # e.g., 1x1km or 1km..5km
-    args, _ = ap.parse_known_args()
-
-    # 1) explicit files/folders
+    # 1) explicit files/folders win
     if args.paths:
         csvs = discover_csvs(args.paths)
-        side_km = area_side_km(None)
+        side_km = area_side_km(None)  # unknown
     else:
-        # 2) resolve area-aware base dir (silent on missing)
+        # 2) resolve area-aware base dir
         base = Path(args.base_dir)
         base_resolved, area_options = resolve_area_base(base, args.area)
         if area_options is not None:
-            return  # nothing to print
+            print(f"No *_results.csv found under base-dir: {base.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {base.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
+
         csvs = discover_default(base_resolved)
         if not csvs:
-            return  # nothing to print
+            print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
+            sys.exit(2)
         side_km = area_side_km(args.area)
-
-    if not csvs:
-        return  # nothing to print
 
     rows: List[Dict[str, Any]] = []
     for p in csvs:
         try:
             rows.append(build_row(Path(p), side_km))
-        except Exception:
-            # remain silent to keep output strictly the scoreboard
-            pass
+        except Exception as e:
+            print(f"[WARN] Failed to parse {p}: {e}", file=sys.stderr)
 
-    if not rows:
-        return  # nothing to print
-
-    # >>> PRINT STRICTLY THE SCOREBOARD <<<
     title = "SCENARIO 07 – Propagation Model Testing (ns-3)"
     if args.area:
         title += f"  (area: {normalize_area(args.area)})"
     print_scoreboard(rows, title=title)
-
+    print_detailed_analysis(rows)
 
 if __name__ == "__main__":
     main()

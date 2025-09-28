@@ -301,42 +301,43 @@ def print_scoreboard(rows: List[Dict[str, Any]], title="SCENARIO 06 — Collisio
 
 # ---------- main ----------
 def main():
-    # SCOREBOARD-ONLY main: no context/init banners, no warnings.
-    import argparse, sys
-    from pathlib import Path
+    ap = argparse.ArgumentParser(description="Scenario 06 — ns-3 Collision & Capture Analyzer")
+    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok).")
+    ap.add_argument("--base-dir", type=str, default="output/scenario-06-collision-capture",
+                    help="Base folder for *_results.csv. If --area is given, _<area> is appended.")
+    ap.add_argument("--area", type=str, default=None,
+                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
+    args = ap.parse_args()
 
-    ap = argparse.ArgumentParser(add_help=False)  # stay quiet
-    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
-    ap.add_argument("--base-dir", type=str, default="output/scenario-06-collision-capture", help=argparse.SUPPRESS)
-    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)  # e.g., 1x1km or 1km..5km
-    args, _ = ap.parse_known_args()
-
-    # 1) explicit paths (silent)
+    # 1) explicit paths win
     if args.paths:
         csvs = discover_csvs(args.paths)
     else:
-        # 2) resolve area-aware base dir (silent if missing)
+        # 2) resolve area-aware base dir
         base = Path(args.base_dir)
         base_resolved, area_options = resolve_area_base(base, args.area)
         if area_options is not None:
-            return  # nothing to print
-        csvs = discover_default(base_resolved)
+            print(f"No *_results.csv found under base-dir: {base.resolve()}")
+            if area_options:
+                print("Available area folders:")
+                for a in area_options:
+                    print(f"  - {base.name}_{a}")
+                print("\nHint: pass --area <one of the above>, e.g.:")
+                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
+            sys.exit(2)
 
-    if not csvs:
-        return  # nothing to print
+        csvs = discover_default(base_resolved)
+        if not csvs:
+            print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
+            sys.exit(2)
 
     rows: List[Dict[str, Any]] = []
     for p in csvs:
         try:
             rows.append(build_row(Path(p)))
-        except Exception:
-            # remain silent on failures to keep output strictly the scoreboard
-            pass
+        except Exception as e:
+            print(f"[WARN] Failed to parse {p}: {e}", file=sys.stderr)
 
-    if not rows:
-        return  # nothing to print
-
-    # >>> PRINT STRICTLY THE SCOREBOARD <<<
     title = "SCENARIO 06 — Collision & Capture (ns-3)"
     if args.area:
         title += f"  (area: {normalize_area(args.area)})"

@@ -18,7 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Default areas if not provided
 if [[ -z "${AREAS:-}" ]]; then
-  AREAS="0x0km 1x1km 2x2km 3x3km 4x4km 5x5km"
+  AREAS="1x1km 2x2km 3x3km 4x4km 5x5km"
 fi
 
 # Ordered list of analyzers to run (edit if you add more)

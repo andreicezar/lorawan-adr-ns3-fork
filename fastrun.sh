@@ -17,7 +17,6 @@ echo "=== FIRST BUILD ==="
 
 # 4. Run all scenarios
 echo "=== RUN SIMULATION SCRIPT ==="
-bash scratch/scenario-00-simple/run-00.sh
 # bash scratch/scenario-01-baseline/run-01.sh all
 # bash scratch/scenario-02-adr-comparison/run-02.sh 
 # bash scratch/scenario-03-sf-impact/run-03.sh
@@ -26,6 +25,6 @@ bash scratch/scenario-00-simple/run-00.sh
 # bash scratch/scenario-06-collision-capture/run-06.sh
 # bash scratch/scenario-07-propagation-models/run-07.sh
 # bash scratch/scenario-08-multi-gateway/run-08.sh
-# bash scratch/run-all.sh --all
+bash scratch/run-all.sh --all
 
 echo "=== ALL DONE ==="
