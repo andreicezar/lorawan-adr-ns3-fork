@@ -339,50 +339,48 @@ def print_detailed_analysis(rows: List[Dict[str, Any]]):
 
 # ---------- main ----------
 def main():
-    ap = argparse.ArgumentParser(description="Scenario 08 – ns-3 Multi-Gateway Analyzer")
-    ap.add_argument("paths", nargs="*", help="CSV files or folders (glob ok). If not given, use --base-dir/--area.")
-    ap.add_argument("--base-dir", type=str, default="output/scenario-08-multi-gateway",
-                    help="Base folder for *_results.csv (area suffix added if --area is given).")
-    ap.add_argument("--area", type=str, default=None,
-                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). If omitted and only suffixed dirs exist, the script lists them.")
-    args = ap.parse_args()
+    # SCOREBOARD-ONLY main: no context/init banners, no warnings, no detailed analysis.
+    import argparse
+    from pathlib import Path
 
-    # 1) explicit paths provided → use them
+    ap = argparse.ArgumentParser(add_help=False)  # keep it quiet
+    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
+    ap.add_argument("--base-dir", type=str, default="output/scenario-08-multi-gateway", help=argparse.SUPPRESS)
+    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)  # e.g., 1x1km or 1km..5km
+    args, _ = ap.parse_known_args()
+
+    # 1) explicit files/folders (silent)
     if args.paths:
         csvs = discover_csvs(args.paths)
     else:
-        # 2) resolve area-aware base dir
+        # 2) resolve area-aware base dir (stay silent if missing/ambiguous)
         base = Path(args.base_dir)
         base_resolved, area_options = resolve_area_base(base, args.area)
         if area_options is not None:
-            # user did not pass --area and base_dir doesn't exist, but suffixed dirs exist
-            print(f"No *_results.csv found under base-dir: {base.resolve()}")
-            if area_options:
-                print("Available area folders:")
-                for a in area_options:
-                    print(f"  - {base.name}_{a}")
-                print("\nHint: pass --area <one of the above>, e.g.:")
-                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
-            sys.exit(2)
-
+            return  # nothing to print
         csvs = discover_default(base_resolved)
-        if not csvs:
-            print(f"No *_results.csv found under base-dir: {base_resolved.resolve()}", file=sys.stderr)
-            sys.exit(2)
 
+    if not csvs:
+        return  # nothing to print
+
+    # Build rows WITHOUT printing anything else
     rows: List[Dict[str, Any]] = []
     for p in csvs:
         try:
             rows.append(build_row(Path(p)))
-        except Exception as e:
-            print(f"[WARN] Failed to parse {p}: {e}", file=sys.stderr)
+        except Exception:
+            # remain silent on failures to keep output strictly the scoreboard
+            pass
 
-    # title shows the area if known
+    if not rows:
+        return  # nothing to print
+
+    # >>> PRINT STRICTLY THE SCOREBOARD <<<
     title = "SCENARIO 08 – Multi-Gateway Coordination (ns-3)"
     if args.area:
         title += f"  (area: {normalize_area(args.area)})"
     print_scoreboard(rows, title=title)
-    print_detailed_analysis(rows)
+
 
 if __name__ == "__main__":
     main()

@@ -424,57 +424,58 @@ def print_scoreboard(rows: List[Dict[str,Any]]) -> None:
 
 # -------------------------- main --------------------------
 def main():
-    ap = argparse.ArgumentParser(description="Analyze ns-3 Scenario 01 (Baseline variants) — area-aware")
-    ap.add_argument("paths", nargs="*", help="(optional) CSV files or directories containing '*_results.csv'")
-    ap.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR,
-                    help="Root folder that contains sub-scenarios (default: output/scenario-01-enhanced)")
-    ap.add_argument("--shell-script", type=Path, default=None,
-                    help="run-01.sh to enrich init conditions (optional)")
-    ap.add_argument("--area", type=str, default=None,
-                    help="Area suffix (e.g., 1x1km, 2x2km, 3x3km). Also accepts 1km..5km.")
-    args = ap.parse_args()
+    # SCOREBOARD-ONLY main: no banners, no init/context, no warnings.
+    import argparse, sys, io, contextlib
+    from pathlib import Path
 
-    # 1) explicit paths win
-    inputs = [Path(p) for p in args.paths]
+    ap = argparse.ArgumentParser(add_help=False)  # keep it quiet
+    ap.add_argument("paths", nargs="*", help=argparse.SUPPRESS)
+    ap.add_argument("--base-dir", type=Path, default=DEFAULT_BASE_DIR, help=argparse.SUPPRESS)
+    ap.add_argument("--area", type=str, default=None, help=argparse.SUPPRESS)
+    ap.add_argument("--shell", type=Path, default=None, help=argparse.SUPPRESS)
+    args, _ = ap.parse_known_args()
+
+    # Collect CSV inputs silently
+    inputs = [Path(p) for p in args.paths] if args.paths else []
     if inputs:
         files = collect_csvs(inputs)
     else:
-        # 2) resolve area-aware base dir
         base_resolved, area_options = resolve_area_base(args.base_dir, args.area)
         if area_options is not None:
-            print(f"No CSV files found under: {args.base_dir.resolve()}")
-            if area_options:
-                print("Available area folders:")
-                for a in area_options:
-                    print(f"  - {args.base_dir.name}_{a}")
-                print("\nHint: pass --area <one of the above>, e.g.:")
-                print(f"  python3 {Path(sys.argv[0]).name} --area {area_options[0]}")
-            sys.exit(2)
+            return  # stay silent if nothing found
         files = discover_default_csvs(base_resolved)
 
     if not files:
-        print(f"No CSV files found.", file=sys.stderr)
-        print(f"Looked under: {args.base_dir.resolve()}" + (f" (resolved: {base_resolved.resolve()})" if not inputs else ""))
-        if inputs:
-            print("Also checked provided paths:")
-            for p in inputs: print(f"  - {p}")
-        sys.exit(2)
+        return  # nothing to print
 
-    # Prefer user-provided shell script; else try near base dir; else near first CSV
-    shell_path = args.shell_script or find_shell_script_near(args.base_dir) or find_shell_script_near(files[0])
+    # Suppress any prints from helpers while summarizing
+    @contextlib.contextmanager
+    def _silence_stdio():
+        old_out, old_err = sys.stdout, sys.stderr
+        try:
+            sys.stdout = io.StringIO()
+            sys.stderr = io.StringIO()
+            yield
+        finally:
+            sys.stdout = old_out
+            sys.stderr = old_err
 
-    rows: List[Dict[str,Any]] = []
+    rows = []
     for f in files:
         try:
-            rows.append(summarize_one(f, shell_path or find_shell_script_near(f)))
-        except Exception as e:
-            print(f"[WARN] Failed to parse {f}: {e}", file=sys.stderr)
+            with _silence_stdio():
+                try:
+                    rows.append(summarize_one(f, args.shell))  # if summarize_one accepts shell
+                except TypeError:
+                    rows.append(summarize_one(f))              # fallback if it doesn't
+        except Exception:
+            # stay completely silent on parse failures
+            pass
 
     if not rows:
-        print("No results parsed.", file=sys.stderr)
-        sys.exit(3)
+        return
 
-    print_context_table(rows)
+    # >>> PRINT STRICTLY THE SCOREBOARD <<<
     print_scoreboard(rows)
 
 if __name__ == "__main__":
