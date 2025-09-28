@@ -1,7 +1,16 @@
+# Build/Cache
+/build/
+/cmake-cache/
+CMakeCache.txt
+CMakeFiles/
+*.ninja
+build.ninja
+compile_commands.json
+*.o
+*.a
+*.so
+*.dylib
+*.dll
 
-# Never commit SSH keys
-.ssh/
-**/id_ed25519
-**/id_ed25519.pub
-*.pem
-*.key
+# Ignore only Git internals (don’t hide sources)
+**/.git/
