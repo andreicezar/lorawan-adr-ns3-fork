@@ -33,7 +33,7 @@ private:
     
     bool m_expIat{false};
     double m_iatMean{1000.0};
-    ns3::Ptr<ns3::ExponentialRandomVariable> m_iatRv;
+    ns3::Ptr<ns3::ExponentialRandomVariable> m_iatRv; // @todo In flora we have rng-class = "cMersenneTwister". Update it here
 };
 
 } // namespace scenario

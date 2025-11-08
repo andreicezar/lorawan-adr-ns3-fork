@@ -1,7 +1,9 @@
 #include "../common/lora_setup.h"
 #include "../common/scenario_config.h"
 #include "../common/traces.h"
+#include "../common/detailed_propagation_model.h" 
 #include "ns3/mobility-helper.h"
+#include "ns3/constant-position-mobility-model.h"  // ← ADD THIS LINE
 #include "ns3/lorawan-module.h"
 #include "ns3/gateway-lora-phy.h"
 #include "ns3/gateway-lorawan-mac.h"
@@ -12,6 +14,7 @@
 #include "ns3/propagation-delay-model.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/log.h"
+#include <cmath>  // ← ADD THIS LINE for std::log10
 
 NS_LOG_COMPONENT_DEFINE("LoraSetup");
 
@@ -77,60 +80,35 @@ void LoraSetup::DumpAttributes(ns3::Ptr<ns3::Object> obj, const char* label) {
 
 ns3::Ptr<ns3::PropagationLossModel> LoraSetup::CreatePropagationModel() {
     using namespace ns3;
+    
     auto& config = ScenarioConfig::Get();
     
-    Ptr<PropagationLossModel> loss;
+    // Create Log-Distance path loss model
+    NS_LOG_INFO("Using Log-Distance propagation model with gamma=" << config.gamma_path_loss_exponent);
+    Ptr<LogDistancePropagationLossModel> logLoss = CreateObject<LogDistancePropagationLossModel>();
+    logLoss->SetAttribute("Exponent", DoubleValue(config.gamma_path_loss_exponent));
+    logLoss->SetAttribute("ReferenceDistance", DoubleValue(config.reference_distance_m));
+    logLoss->SetAttribute("ReferenceLoss", DoubleValue(config.reference_loss_db));
     
-    if (config.use_friis_model) {
-        NS_LOG_INFO("Using Friis (Free Space) propagation model");
-        loss = CreateObject<FriisPropagationLossModel>();
-        
-    } else if (config.use_okumura_hata_model) {
-        NS_LOG_INFO("Using Okumura-Hata propagation model");
-        Ptr<OkumuraHataPropagationLossModel> okumuraLoss = CreateObject<OkumuraHataPropagationLossModel>();
-        okumuraLoss->SetAttribute("Frequency", DoubleValue(config.okumura_frequency_mhz * 1e6));
-        
-        if (config.okumura_urban_environment) {
-            okumuraLoss->SetAttribute("Environment", EnumValue(ns3::UrbanEnvironment));
-        } else {
-            okumuraLoss->SetAttribute("Environment", EnumValue(ns3::SubUrbanEnvironment));
-        }
-        okumuraLoss->SetAttribute("CitySize", EnumValue(ns3::SmallCity));
-        loss = okumuraLoss;
-        
-    } else {
-        NS_LOG_INFO("Using Log-Distance propagation model with gamma=" << config.gamma_path_loss_exponent);
-        Ptr<LogDistancePropagationLossModel> logLoss = CreateObject<LogDistancePropagationLossModel>();
-        logLoss->SetAttribute("Exponent", DoubleValue(config.gamma_path_loss_exponent));
-        logLoss->SetAttribute("ReferenceDistance", DoubleValue(config.reference_distance_m));
-        logLoss->SetAttribute("ReferenceLoss", DoubleValue(config.reference_loss_db));
-        loss = logLoss;
-    }
+    // Verify configuration
+    DoubleValue actualExponent, actualRefDist, actualRefLoss;
+    logLoss->GetAttribute("Exponent", actualExponent);
+    logLoss->GetAttribute("ReferenceDistance", actualRefDist);
+    logLoss->GetAttribute("ReferenceLoss", actualRefLoss);
     
-    if (config.enable_shadowing) {
-        NS_LOG_INFO("Adding log-normal shadowing with std dev=" << config.shadowing_std_dev_db << " dB");
-        
-        Ptr<RandomPropagationLossModel> shadowingLoss = CreateObject<RandomPropagationLossModel>();
-        Ptr<LogNormalRandomVariable> shadowingVar = CreateObject<LogNormalRandomVariable>();
-        
-        shadowingVar->SetAttribute("Mu", DoubleValue(0.0));
-        shadowingVar->SetAttribute("Sigma", DoubleValue(config.shadowing_std_dev_db * 0.115129));
-        
-        shadowingLoss->SetAttribute("Variable", PointerValue(shadowingVar));
-        loss->SetNext(shadowingLoss);
-    }
+    NS_LOG_UNCOND("=== PROPAGATION MODEL ===");
+    NS_LOG_UNCOND("Exponent: " << actualExponent.Get());
+    NS_LOG_UNCOND("RefDistance: " << actualRefDist.Get() << " m");
+    NS_LOG_UNCOND("RefLoss: " << actualRefLoss.Get() << " dB");
+    NS_LOG_UNCOND("Shadowing: DISABLED (matching FLoRa sigma=0)");
+    NS_LOG_UNCOND("========================");
     
-    NS_LOG_INFO("Propagation setup complete:");
-    NS_LOG_INFO("  - Path loss exponent (gamma): " << config.gamma_path_loss_exponent);
-    NS_LOG_INFO("  - Reference distance: " << config.reference_distance_m << " m");
-    NS_LOG_INFO("  - Reference loss: " << config.reference_loss_db << " dB");
-    NS_LOG_INFO("  - Shadowing enabled: " << (config.enable_shadowing ? "YES" : "NO"));
-    if (config.enable_shadowing) {
-        NS_LOG_INFO("  - Shadowing std dev: " << config.shadowing_std_dev_db << " dB");
-    }
-    NS_LOG_INFO("  - Noise figure: " << config.noise_figure_db << " dB");
+    // Wrap in detailed model for logging
+    Ptr<scenario::DetailedPropagationLossModel> detailedLoss = 
+        CreateObject<scenario::DetailedPropagationLossModel>();
+    detailedLoss->SetPathLossModel(logLoss);
     
-    return loss;
+    return detailedLoss;
 }
 
 LoraSetup::LoraDevices LoraSetup::CreateLoraNetwork(
@@ -148,6 +126,9 @@ LoraSetup::LoraDevices LoraSetup::CreateLoraNetwork(
     
     // Create channel
     Ptr<PropagationLossModel> loss = CreatePropagationModel();
+    Ptr<scenario::DetailedPropagationLossModel> detailedLoss = 
+        DynamicCast<scenario::DetailedPropagationLossModel>(loss);  
+    
     Ptr<PropagationDelayModel> delay = CreateObject<ConstantSpeedPropagationDelayModel>();
     Ptr<LoraChannel> channel = CreateObject<LoraChannel>(loss, delay);
     
@@ -169,6 +150,10 @@ LoraSetup::LoraDevices LoraSetup::CreateLoraNetwork(
     edMac.SetDeviceType(LorawanMacHelper::ED_A);
     edMac.SetRegion(LorawanMacHelper::EU);
     
+    // Register duty cycle bands
+    scenario::RegisterDutyCycleBand(868.0e6, 868.6e6, 0.01);
+    scenario::RegisterDutyCycleBand(868.7e6, 869.2e6, 0.01);
+
     // Create and set address generator
     Ptr<LoraDeviceAddressGenerator> addrGen = CreateObject<LoraDeviceAddressGenerator>(0, 0);
     edMac.SetAddressGenerator(addrGen);
@@ -182,6 +167,7 @@ LoraSetup::LoraDevices LoraSetup::CreateLoraNetwork(
     devices.edDevs = lora.Install(edPhy, edMac, endDevices);
     devices.channel = channel;
     devices.loraHelper = lora;
+    devices.propagationModel = detailedLoss;
     
     NS_LOG_INFO("GW LoRa devs: " << devices.gwDevs.GetN() << " | ED LoRa devs: " << devices.edDevs.GetN());
     
@@ -209,9 +195,6 @@ void LoraSetup::ConfigureEndDevices(const ns3::NetDeviceContainer& edDevs) {
             if (edPhyObj) {
                 edPhyObj->SetSpreadingFactor(7);
                 NS_LOG_INFO("[ED " << i << "] PHY SF set to 7 (may be overridden by MAC DR)");
-                
-                SetDoubleAttrIfPresent(edPhyObj, "EnergyDetection", config.phy_energy_detection_dbm);
-                SetTimeAttrIfPresent(edPhyObj, "MaxTransmissionDuration", Seconds(config.phy_max_tx_duration_sec));
             }
         }
         
@@ -230,12 +213,13 @@ void LoraSetup::ConfigureEndDevices(const ns3::NetDeviceContainer& edDevs) {
                     NS_LOG_INFO("  - " << info.name);
                 }
                 
-                // Force DR5
+                // Force DR5 (SF7)
                 classAMac->SetDataRate(5);
                 NS_LOG_INFO("[ED " << i << "] MAC DataRate set to DR5 (SF7/125kHz)");
                 
-                // Disable duty-cycle if available
-                SetBoolAttrIfPresent(classAMac, "DutyCycleEnabled", false);
+                // Set TX power on MAC
+                classAMac->SetTransmissionPowerDbm(config.ed_tx_power_dbm);
+                NS_LOG_INFO("[ED " << i << "] MAC TX Power set to " << config.ed_tx_power_dbm << " dBm");
             }
         }
     }
@@ -244,9 +228,7 @@ void LoraSetup::ConfigureEndDevices(const ns3::NetDeviceContainer& edDevs) {
 void LoraSetup::ConfigureGateways(const ns3::NetDeviceContainer& gwDevs) {
     using namespace ns3;
     using namespace ns3::lorawan;
-    
-    auto& config = ScenarioConfig::Get();
-    
+
     for (uint32_t g = 0; g < gwDevs.GetN(); ++g) {
         auto gwNd = DynamicCast<LoraNetDevice>(gwDevs.Get(g));
         if (!gwNd) continue;
@@ -270,9 +252,6 @@ void LoraSetup::ConfigureGateways(const ns3::NetDeviceContainer& gwDevs) {
                     struct TypeId::TraceSourceInformation info = tid.GetTraceSource(i);
                     NS_LOG_INFO("  " << info.name << ": " << info.help);
                 }
-                
-                SetDoubleAttrIfPresent(gphy, "EnergyDetection", config.phy_energy_detection_dbm);
-                SetTimeAttrIfPresent(gphy, "MaxTransmissionDuration", Seconds(config.phy_max_tx_duration_sec));
             }
         }
         

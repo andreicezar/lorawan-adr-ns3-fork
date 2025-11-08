@@ -6,10 +6,11 @@
 #include "ns3/lora-channel.h"
 #include "ns3/lora-helper.h"
 #include "ns3/network-server-helper.h"
+#include "detailed_propagation_model.h"
 #include <vector>
 
 namespace scenario {
-
+class DetailedPropagationLossModel;
 class LoraSetup {
 public:
     struct LoraDevices {
@@ -17,6 +18,7 @@ public:
         ns3::NetDeviceContainer edDevs;
         ns3::Ptr<ns3::lorawan::LoraChannel> channel;
         ns3::lorawan::LoraHelper loraHelper;
+        ns3::Ptr<scenario::DetailedPropagationLossModel> propagationModel;
     };
     
     static LoraDevices CreateLoraNetwork(

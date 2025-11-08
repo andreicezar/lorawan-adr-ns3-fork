@@ -43,7 +43,7 @@ void SimpleSender::DoSend() {
     if (m_nPkts > 0 && m_sent >= m_nPkts)
         return;
     
-    ns3::Ptr<ns3::Packet> pkt = ns3::Create<ns3::Packet>(23);
+    ns3::Ptr<ns3::Packet> pkt = ns3::Create<ns3::Packet>(20);
     
     // Tag for nicer logs
     ns3::lorawan::LoraTag tag;

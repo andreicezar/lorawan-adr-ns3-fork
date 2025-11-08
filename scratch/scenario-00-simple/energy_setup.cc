@@ -70,13 +70,13 @@ ns3::energy::EnergySourceContainer EnergySetup::InstallEnergyModels(
         }
         
         // (e) Traces
-        lrm->TraceConnectWithoutContext("TotalEnergyConsumption", 
-                                       MakeCallback(&TraceCallbacks::OnEdEnergyTotal));
-        Ptr<BasicEnergySource> bes = DynamicCast<BasicEnergySource>(es);
-        if (bes) {
-            bes->TraceConnectWithoutContext("RemainingEnergy", 
-                                           MakeCallback(&TraceCallbacks::OnRemainingEnergy));
-        }
+        // lrm->TraceConnectWithoutContext("TotalEnergyConsumption", 
+        //                                MakeCallback(&TraceCallbacks::OnEdEnergyTotal));
+        // Ptr<BasicEnergySource> bes = DynamicCast<BasicEnergySource>(es);
+        // if (bes) {
+        //     bes->TraceConnectWithoutContext("RemainingEnergy", 
+        //                                    MakeCallback(&TraceCallbacks::OnRemainingEnergy));
+        // }
     }
     
     return sources;
