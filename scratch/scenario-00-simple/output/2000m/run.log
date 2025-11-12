@@ -1,0 +1,153 @@
+[0/2] Re-checking globbed directories...
+ninja: no work to do.
++0.000000000s -1 GW-ED distance = 2000 m
+=== PROPAGATION MODEL ===
+Exponent: 2.32
+RefDistance: 100 m
+RefLoss: 104.21 dB
+Shadowing: DISABLED (matching FLoRa sigma=0)
+========================
+Added frame header of size 8 bytes.
+10.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+10.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=10.0668
+10.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868500000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=10.0668 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+70.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+70.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=70.0668
+70.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868100000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=70.0668 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+130.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+130.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=130.067
+130.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868500000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=130.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+190.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+190.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=190.067
+190.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868100000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=190.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+250.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+250.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=250.067
+250.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868300000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=250.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+310.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+310.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=310.067
+310.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868100000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=310.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+370.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+370.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=370.067
+370.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868100000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=370.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+430.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+430.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=430.067
+430.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868100000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=430.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+490.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+490.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=490.067
+490.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868500000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=490.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
+Added frame header of size 8 bytes.
+550.000000s 1 ED_MAC_TX sf=SF7 dr=5 f=0.000000 Hz
+Starting cycle over all 2 PHYs
+Sender mobility: 2000:0:1.5
+Receiver mobility: 0:0:15
+Getting node index from NetDevice, since it exists
+Scheduling reception of the packet
+550.000000s 1 ED_PHY_TX_BEGIN sf=SF7 dr=5 f=0.000000 Hz
+DEBUG: OnGwMacRxOk called at t=550.067
+550.066823s 0 GW_MAC_RX_OK sf=SF7 dr=5 RSSI=-120.394125 dBm SNR=-3.363226 dB (req=-7.500000 dB, margin=4.136774 dB) f=868500000.000000 Hz
+DEBUG: WriteDutyCycleRow called - time=550.067 nodeId=1
+DEBUG: Wrote duty cycle row to CSV
+Using parameters: 869525000 Hz, DR0
+We have 1 transmissions left. We were not transmitting confirmed messages.
++600.000000000s -1 === Final Statistics ===
++600.000000000s -1 Global MAC performance: 10.000000 10.000000
++600.000000000s -1 Gateway 0 PHY stats: 10 10 0 0 0 0 
+Command 'build/scratch/scenario-00-simple/ns3.45-scenario-00-simple-debug --gw_ed_distance_m=2000' died with <Signals.SIGSEGV: 11>.

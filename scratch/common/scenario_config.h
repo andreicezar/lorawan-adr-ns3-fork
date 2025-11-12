@@ -54,12 +54,12 @@ public:
     
     // Propagation Loss Model Parameters (FUNCTIONAL)
     double gamma_path_loss_exponent = 2.32;
-    double reference_distance_m = 1000.0;    // 1 km reference
-    double reference_loss_db = 127.41;        // 120 dB at 1 km
+    double reference_distance_m = 100.0;    // 100m reference
+    double reference_loss_db = 104.21;
     
     // Shadowing Parameters (FUNCTIONAL)
     double shadowing_std_dev_db = 3.57;
-    bool enable_shadowing = true;
+    bool enable_shadowing = false;
     double shadowing_correlation_distance_m = 50.0;  // Not implemented
     
     // Okumura-Hata specific (NOT IMPLEMENTED)

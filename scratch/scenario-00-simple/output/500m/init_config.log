@@ -1,0 +1,77 @@
+========================================
+SCENARIO CONFIGURATION - INITIAL VALUES
+========================================
+
+[SIMULATION CONTROL]
+sim_time_s = 600
+gw_ed_distance_m = 500
+
+[TRAFFIC GENERATION]
+n_pkts_to_send = 0 (0 = infinite)
+fixed_period_s = 60
+use_exponential_iat = false
+exp_iat_mean_s = 1000
+
+[NETWORK CONFIGURATION]
+enable_adr = false
+use_aloha_matrix = false (false = Goursaud, true = ALOHA)
+cloud_backhaul_datarate = 1Gbps
+cloud_backhaul_delay = 10ms
+
+[PHY LAYER CONFIGURATION]
+ed_tx_power_dbm = 14
+
+[LORA RADIO PARAMETERS]
+Spreading Factor (SF) = 7 (DR5)
+Data Rate (DR) = 5
+Bandwidth = 125 kHz (hardcoded for DR0-5)
+Coding Rate = 4/5
+
+[PROPAGATION MODEL SELECTION]
+use_log_distance_model = true
+
+[PATH LOSS PARAMETERS]
+gamma_path_loss_exponent = 2.32
+reference_distance_m = 100
+reference_loss_db = 104.21
+
+[SHADOWING PARAMETERS]
+enable_shadowing = false
+shadowing_std_dev_db = 3.57
+
+[NOISE PARAMETERS] (hardcoded in NoiseFloorDbm())
+thermal_noise_dbm_hz = -174.0 dBm/Hz
+noise_figure_db = 6.0 dB
+noise_floor_125kHz = -117.031 dBm
+
+[SNR REQUIREMENTS] (for logging/analysis only)
+use_conservative_snr_thresholds = false
+SNR Requirements (Standard):
+  SF12: -20 dB
+  SF11: -17.5 dB
+  SF10: -15 dB
+  SF9:  -12.5 dB
+  SF8:  -10 dB
+  SF7:  -7.5 dB
+
+[ENERGY MODEL PARAMETERS]
+en_supply_voltage_v = 3.3
+en_initial_energy_j = 10000
+en_update_interval_s = 3600
+en_idle_current_a = 0.0001 (0.1 mA)
+en_rx_current_a = 0.0097 (9.7 mA)
+en_sleep_current_a = 1.5e-06 (1.5 µA)
+en_tx_model_eta = 0.1
+en_tx_model_standby_a = 0.0001
+
+[OUTPUT FILES]
+en_trace_file_total = ed-energy-total.csv
+en_trace_file_rmn = ed-remaining-energy.csv
+snr_log_file = snr_log.csv
+global_performance_file = global-performance.txt
+phy_performance_file = phy-performance.txt
+device_status_file = device-status.txt
+
+========================================
+END OF CONFIGURATION
+========================================

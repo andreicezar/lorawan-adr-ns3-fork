@@ -1,0 +1,1 @@
+simulator,scenario,seed,distance_m,sf,adr_enabled,n_nodes,packet_seq,rssi_dbm,snr_db,rssi_mean_dbm,rssi_std_dbm,snr_mean_db,snr_std_db,pdr_percent,der_percent,packets_sent,packets_received,latency_ms,latency_p50_ms,latency_p90_ms,toa_ms,energy_per_tx_mj,energy_total_j,runtime_s,notes
