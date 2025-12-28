@@ -51,3 +51,14 @@ simulations/**/log.txt
 *.lfs
 simulation_tool/flora/simulations/config_files_for_scenarios/adr_margin_packet_size_tests/debug_adr_opt_log.txt
 debug_adr_opt_log.txt
+
+# ns-3 build/cmake artifacts
+ns-3.42/cmake-cache/
+**/cmake-cache/
+**/CMakeFiles/
+**/*.gch
+**/*.o
+**/*.a
+**/*.so
+build/
+build*/
