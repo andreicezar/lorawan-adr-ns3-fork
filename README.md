@@ -1,6 +1,9 @@
-# ns-3 LoRaWAN / ADRopt work (simulator fork)
+# LoRaWAN ADR experiments — ns-3 fork
 
-Primary entry point for the project (submodules + scripts + reproducibility):
+This repository contains ns-3 LoRaWAN simulator modifications used for ADR/ADRopt research.
+
+Primary entry point (reproducible benchmark, scripts, and submodules):
 - **lorawan-adr-benchmark**
 
-This repository hosts ns-3-specific development. For running experiments and analysis scripts, use the umbrella repo.
+Notes:
+- Analysis scripts and scratch workspaces are maintained in the umbrella repository.
